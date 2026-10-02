@@ -14,7 +14,7 @@
   --accent: #0f5f73; --accent-ink: #ffffff; --good: #2b7a52; --warn: #a96a14; --bad: #b0402f;
   --t1: #3f7d5a; --t2: #2f6db5; --t3: #7a4fb0; --t4: #b8641e; --tag-ink: #ffffff;
   --good-bg: #e3f1e9; --warn-bg: #f8ecd8; --bad-bg: #f6e0db;
-  --tap: 44px; --radius: 12px;
+  --tap: 44px; --radius: 12px; color-scheme: light;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -24,15 +24,16 @@
     --bg: #11161d; --surface: #1a212b; --surface2: #212a37; --ink: #e5eaf0; --muted: #98a4b3; --line: #2c3745;
     --accent: #5db7d1; --accent-ink: #0b1a20; --good: #62c08e; --warn: #e0a24f; --bad: #e57f6b;
     --t1: #6fc596; --t2: #6ea8ea; --t3: #b592e6; --t4: #eb9a55; --tag-ink: #0b1117;
-    --good-bg: #1b3328; --warn-bg: #3a2d17; --bad-bg: #3b2320;
+    --good-bg: #1b3328; --warn-bg: #3a2d17; --bad-bg: #3b2320; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #11161d; --surface: #1a212b; --surface2: #212a37; --ink: #e5eaf0; --muted: #98a4b3; --line: #2c3745;
   --accent: #5db7d1; --accent-ink: #0b1a20; --good: #62c08e; --warn: #e0a24f; --bad: #e57f6b;
   --t1: #6fc596; --t2: #6ea8ea; --t3: #b592e6; --t4: #eb9a55; --tag-ink: #0b1117;
-  --good-bg: #1b3328; --warn-bg: #3a2d17; --bad-bg: #3b2320;
+  --good-bg: #1b3328; --warn-bg: #3a2d17; --bad-bg: #3b2320; color-scheme: dark;
 }
+:root[data-theme="light"] { color-scheme: light; }
 *, *::before, *::after { box-sizing: border-box; }
 html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); -webkit-text-size-adjust: 100%; }
 body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
@@ -54,7 +55,7 @@ ul.plain li { margin-bottom: 4px; }
 .top-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .top-head .sub { color: var(--muted); max-width: 64ch; margin: 6px 0 0; }
 .grid { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 18px; align-items: start; }
-.tabs, .mbar { display: none; }
+.tabs { display: none; }
 
 /* status bar: fixed size so the page never jumps while values change */
 .statusbar { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; height: 116px; margin-bottom: 16px; }
@@ -89,9 +90,8 @@ ul.plain li { margin-bottom: 4px; }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 .field label { flex: 1; min-width: 0; }
 .field small { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
-input[type=number], select { font: inherit; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); color: var(--ink); }
-input[type=number] { width: 96px; text-align: right; -moz-appearance: textfield; appearance: textfield; }
-input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input.int, select { font: inherit; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); color: var(--ink); }
+input.int { width: 96px; text-align: right; }
 input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 input:disabled { opacity: .45; }
 input:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -127,7 +127,7 @@ label.chk { display: flex; align-items: center; gap: 10px; padding: 6px 0; curso
 .grow { grid-template-columns: minmax(0, 1fr) 48px 84px 44px; }
 .urow .nm, .grow .nm { font-size: 13.5px; line-height: 1.3; }
 .urow .nm i, .grow .nm i { font-style: normal; color: var(--muted); font-size: 12px; }
-.urow input[type=number], .grow input[type=number] { width: 84px; min-height: 34px; padding: 4px 8px; }
+.urow input.int, .grow input.int { width: 84px; min-height: 34px; padding: 4px 8px; }
 .urow .mx, .urow .cs, .grow .mx { font-size: 12.5px; color: var(--muted); text-align: right; min-width: 0; }
 .urow .cs .pill { white-space: normal; max-width: 100%; justify-content: center; text-align: center; line-height: 1.25; border-radius: 10px; padding: 2px 8px; }
 .grow .rc { font-size: 13px; font-weight: 600; text-align: right; color: var(--accent); }
@@ -175,7 +175,7 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 .panel > details > summary .stepno { margin-right: 0; }
 .curgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .cur { display: flex; align-items: center; gap: 10px; }
-.cur input[type=number] { flex: 1; width: 100%; min-width: 0; }
+.cur input.int { flex: 1; width: 100%; min-width: 0; }
 .cdline { font-size: 14px; margin: 2px 0 6px; }
 .cdline .cd { font-variant-numeric: tabular-nums; }
 .nxlabel { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
@@ -184,10 +184,28 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 .nxrow label.nf b { color: var(--tc); min-width: 20px; }
 .nxrow label.nf input { flex: 1; min-width: 0; width: 100%; }
 
+
+/* ---------- header buttons, setup-code dialog, number tip, update bar ---------- */
+.hbtns { display: flex; gap: 8px; align-items: center; }
+.hbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 38px; padding: 6px 12px; }
+.hbtn svg { width: 18px; height: 18px; flex: none; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); padding: 18px; width: min(92vw, 460px); }
+dialog::backdrop { background: rgba(0, 0, 0, .5); }
+dialog h2 { margin-bottom: 4px; }
+dialog h3 { margin: 16px 0 4px; }
+dialog textarea { width: 100%; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 14px; line-height: 1.4; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface2); color: var(--ink); resize: none; word-break: break-all; }
+dialog .row2 { margin-top: 8px; }
+#numTip { position: absolute; z-index: 60; background: var(--ink); color: var(--bg); padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; pointer-events: none; opacity: 0; transition: opacity .15s; }
+#numTip.show { opacity: 1; }
+.updatebar { display: none; }
+.updatebar.show { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; justify-content: center; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); border-top: 1px solid var(--line); }
+.updatebar button { width: 100%; max-width: 420px; }
+.hlabel { display: inline; }
+
 /* ---------- tablet and phone ---------- */
 @media (max-width: 900px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
-  .wrap { padding: 12px 12px 104px; }
+  .wrap { padding: 12px 12px 88px; }
   .statusbar { grid-template-columns: minmax(0, 1fr); height: auto; gap: 8px; margin-bottom: 10px; }
   #sbMain { height: 122px; }
   #sbCheck { height: 64px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "big lab" "big sub"; column-gap: 14px; align-content: center; }
@@ -199,8 +217,8 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
   .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
   .grid[data-tab="plan"] #inputs { display: none; }
   .grid[data-tab="setup"] #results { display: none; }
-  .mbar { display: flex; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); border-top: 1px solid var(--line); }
-  .mbar button { flex: 1; }
+  .hlabel { display: none; }
+  .hbtn { min-width: var(--tap); padding: 6px 10px; }
   h1 { font-size: 24px; }
   .top-head .sub { display: none; }
   .top-head { align-items: center; flex-wrap: nowrap; }
@@ -211,14 +229,14 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
   /* two-line rows: name on top, then level / max / next */
   .urow { grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "nm nm nm" "in mx cs"; row-gap: 6px; column-gap: 12px; padding: 8px 0 8px 10px; margin-bottom: 6px; }
   .urow .nm { grid-area: nm; font-size: 14.5px; }
-  .urow input[type=number] { grid-area: in; width: 92px; }
+  .urow input.int { grid-area: in; width: 92px; }
   .urow .mx { grid-area: mx; text-align: left; } .urow .mx::before { content: "max "; }
   .urow .cs { grid-area: cs; text-align: right; } .urow .cs[data-k="cost"]::before { content: "next "; }
   .urow.locked .mx { display: none; }
   .grow { grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "nm nm nm" "in rc mx"; row-gap: 6px; column-gap: 12px; padding: 8px 0 8px 10px; margin-bottom: 6px; }
   .grow .nm { grid-area: nm; font-size: 14.5px; }
   .grow input { grid-area: in; }
-  .grow input[type=number] { width: 92px; }
+  .grow input.int { width: 92px; }
   .grow input[type=checkbox] { justify-self: start; }
   .grow .rc { grid-area: rc; text-align: left; } .grow .rc::before { content: "rec "; font-weight: 400; color: var(--muted); }
   .grow .mx { grid-area: mx; text-align: right; } .grow .mx::before { content: "max "; }
@@ -233,8 +251,8 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 }
 /* touch devices: 16px text stops iOS zooming into fields, and every control is at least 44px tall */
 @media (pointer: coarse), (max-width: 700px) {
-  input[type=number], select, button { min-height: var(--tap); font-size: 16px; }
-  .urow input[type=number], .grow input[type=number] { min-height: var(--tap); }
+  input.int, select, button, textarea { min-height: var(--tap); font-size: 16px; }
+  .urow input.int, .grow input.int { min-height: var(--tap); }
   input[type=checkbox] { width: 26px; height: 26px; }
   .panel > details > summary { min-height: var(--tap); }
   label.chk { min-height: var(--tap); }
@@ -248,9 +266,13 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
   <header class="top-head">
     <div>
       <h1>Event upgrade planner</h1>
-      <p class="sub">Enter your prestige, currency and upgrades. The planner works out what to buy and when to check in.</p>
+      <p class="sub">Enter your prestige, currency and upgrades. The planner works out what to buy and when to buy it.</p>
     </div>
-    <button id="btnReset" type="button" aria-label="Reset all inputs">Reset</button>
+    <div class="hbtns">
+      <button id="btnTheme" class="hbtn" type="button" aria-label="Switch theme"></button>
+      <button id="btnCode" class="hbtn" type="button" aria-label="Import/Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg><span class="hlabel">Import/Export</span></button>
+      <button id="btnReset" class="hbtn" type="button" aria-label="Reset all inputs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="hlabel">Reset</span></button>
+    </div>
   </header>
 
   <section class="timebar" id="timebar">
@@ -260,7 +282,7 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 
   <section class="statusbar" id="top" aria-live="polite">
     <div class="sb" id="sbMain"><span class="busytag">Updating</span><div class="lab" id="sbLab">Goal projection</div><div class="bigline" id="sbBig">Calculating</div><div class="subline" id="sbSub">Starting</div></div>
-    <div class="sb" id="sbCheck"><div class="lab">Next check-in</div><div class="bigline" id="ckBig">...</div><div class="subline" id="ckSub"></div></div>
+    <div class="sb" id="sbCheck"><div class="lab">Next upgrade set</div><div class="bigline" id="ckBig">...</div><div class="subline" id="ckSub"></div></div>
   </section>
 
   <nav class="tabs" role="tablist" aria-label="Planner view">
@@ -272,8 +294,18 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
     <aside id="inputs" aria-label="Setup"></aside>
     <main id="results" aria-live="polite"></main>
   </div>
-  <div class="mbar"><button class="primary" type="button" id="btnCalcMobile">Update plan</button></div>
+  <div class="updatebar" id="updateBar"><button class="primary" type="button" id="btnUpdate">Update plan</button></div>
 </div>
+<dialog id="codeDlg" aria-labelledby="cdTitle">
+  <h2 id="cdTitle">Import/Export</h2>
+  <p class="note">Copy this code to bring your setup to another device.</p>
+  <textarea id="cdOut" readonly rows="2" aria-label="Your setup code"></textarea>
+  <div class="row2"><button class="primary" type="button" id="cdCopy">Copy code</button><span class="note" id="cdCopied" role="status"></span></div>
+  <h3>Import a code</h3>
+  <textarea id="cdIn" rows="2" placeholder="Paste a code here" aria-label="Setup code to import" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  <div class="row2"><button type="button" id="cdImport">Import</button><span class="note" id="cdMsg" role="status"></span></div>
+  <div class="row2" style="justify-content:flex-end;margin-top:14px"><button type="button" id="cdClose">Close</button></div>
+</dialog>
 <script>
 const Engine = (function () {
   'use strict';
@@ -340,6 +372,8 @@ const Engine = (function () {
     if (u.kind === 'cap') CAP_ID[u.tier] = u.id;
     u.rel = u.kind === 'cap' ? true : VALUE_KEYS.some(k => u.fx[k]);
     u.fxList = Object.keys(u.fx).map(k => [k, u.fx[k]]);
+    const kk = Object.keys(u.fx).join(',');
+    u.cat = u.kind ? 'cap' : ({ pb: 'pb', ev: 'ev', ms: 'ms', as: 'as', atk: 'atk', hp: 'hp', 'cc': 'crit', 'cc,cd': 'crit', 'cd,ecd': 'ecrit', eas: 'enemy', edmg: 'enemy', 'ecc,ecd': 'enemy', blk: 'blk', x5: 'x5' }[kk] || 'bundle');
   });
   const CAPCAP_ID = UPG.find(u => u.kind === 'capcap').id;
   // Within a tier an upgrade only unlocks once the one above it in the list has at least 1 level.
@@ -510,6 +544,7 @@ const Engine = (function () {
     const P = ctx.P, gems = ctx.gems, lv = ctx.lv, cur = ctx.cur, target = ctx.target, lambda = ctx.lambda;
     const waiting = ctx.waiting;
     const RULES = ctx.rules !== false;
+    const ablate = ctx.ablate || null, catW = ctx.catW || null;
     let st = computeStats(P, gems, lv);
     const out = [];
     // one-hit damage needed to clear every wave before the target: 7 x wave - 3 (capped at 704 from P10 on)
@@ -595,6 +630,7 @@ const Engine = (function () {
         };
         for (const u of BY_TIER[t]) {
           if (P < u.unlock || u.kind === 'capcap' || !u.rel) continue;
+          if (ablate && ablate.has(u.id)) continue;   // analysis only: never bought directly (still bought as a 1-level unlock prerequisite)
           const L = lv[u.id], mx = maxLevel(u, lv);
           if (L >= mx) continue;
           const miss = missingChain(u);
@@ -650,6 +686,7 @@ const Engine = (function () {
             if (RF.weights && target >= 205 && st.hp >= HP_REQ && u.fx.hp) weight *= 0.25;   // 150k HP is plenty in the end game
             if (RF.weights && u.fx.pb && frozen && st.hp >= HP_REQ) weight = 0.25;            // prestige bonus only boosts HP and damage, both capped
           }
+          if (catW && catW[u.cat] != null) weight *= catW[u.cat];
           for (const k of ks) {
             const own = COST[u.id].pref[L + k] - COST[u.id].pref[L];
             const cost = own + preCost;
@@ -698,7 +735,7 @@ const Engine = (function () {
       const target = pi < path.length ? path[pi][0] : goal;
       const before = cur.slice();
       const Jb = adaptG ? evalBuild(computeStats(P, gems, lv), target, lambda).J : 0;
-      const buys = spendAll({ P, gems, lv, cur, target, lambda, waiting, rules: o.rules });
+      const buys = spendAll({ P, gems, lv, cur, target, lambda, waiting, rules: o.rules, ablate: o.ablate, catW: o.catW });
       const st = computeStats(P, gems, lv);
       const gain = adaptG ? Math.max(0, evalBuild(st, target, lambda).J - Jb) : 0;
       const prof = evalBuild(st, target, 0);
@@ -913,7 +950,7 @@ const Engine = (function () {
     return lv;
   }
   function normalized() {
-    const P = clamp(Math.round(num(S.P, 0)), 0, 49);
+    const P = clamp(Math.round(num(S.P, 0)), 0, 100000);
     const gm = E.gemMax(P);
     const ownedGems = {
       atk: clamp(Math.round(num(S.gems.atk, 0)), 0, gm.atk), hp: clamp(Math.round(num(S.gems.hp, 0)), 0, gm.hp),
@@ -932,25 +969,24 @@ const Engine = (function () {
   function field(label, id, val, opts) {
     opts = opts || {};
     return '<div class="field"><label for="' + id + '">' + label + (opts.hint ? '<small' + (opts.hintId ? ' id="' + opts.hintId + '"' : '') + '>' + opts.hint + '</small>' : '') + '</label>' +
-      '<input type="number" inputmode="decimal" id="' + id + '" value="' + val + '"' + (opts.min != null ? ' min="' + opts.min + '"' : '') +
-      (opts.max != null ? ' max="' + opts.max + '"' : '') + '></div>';
+      '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="' + id + '" value="' + val + '"' + '></div>';
   }
   function buildInputs() {
     let h = '';
     // 0. Event settings
     h += '<section class="panel"><h2><span class="stepno">0</span>Event Settings</h2>' + field('Wave goal', 'in_goal', S.goal, { min: 5, hint: 'Default 250' });
-    h += '<div class="field"><label for="in_interval">Check-in interval</label><select id="in_interval"><option value="auto">Auto</option>' + INTERVALS.map(v => '<option value="' + v + '">' + ivLabel(v) + '</option>').join('') + '</select></div>';
+    h += '<div class="field"><label for="in_interval">Time between upgrade sets</label><select id="in_interval"><option value="auto">Auto</option>' + INTERVALS.map(v => '<option value="' + v + '">' + ivLabel(v) + '</option>').join('') + '</select></div>';
     h += '<p class="note" id="ivDesc">' + lastIvDesc + '</p>';
     h += '<label class="chk"><input type="checkbox" id="in_manual"' + (S.manual ? ' checked' : '') + '> Set the time left manually</label>';
     h += '<div id="manualTime"' + (S.manual ? '' : ' hidden') + '><div class="field"><label>Time left</label><div class="timefield">' +
-      '<input type="number" inputmode="numeric" id="in_days" min="0" value="' + S.days + '"><span>d</span>' +
-      '<input type="number" inputmode="numeric" id="in_hours" min="0" value="' + S.hours + '"><span>h</span>' +
-      '<input type="number" inputmode="numeric" id="in_mins" min="0" value="' + S.mins + '"><span>m</span></div></div></div></section>';
+      '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_days" value="' + S.days + '"><span>d</span>' +
+      '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_hours" value="' + S.hours + '"><span>h</span>' +
+      '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_mins" value="' + S.mins + '"><span>m</span></div></div></div></section>';
     // 1. Prestige
-    h += '<section class="panel"><h2><span class="stepno">1</span>Prestige</h2>' + field('Prestige tier', 'in_P', S.P, { min: 0, max: 49, hint: '0 to 49' }) + '<p class="pinfo" id="presInfo"></p></section>';
+    h += '<section class="panel"><h2><span class="stepno">1</span>Prestige</h2>' + field('Prestige tier', 'in_P', S.P, { hint: 'Whole number' }) + '<p class="pinfo" id="presInfo"></p></section>';
     // 2. Currency
     h += '<section class="panel"><h2><span class="stepno">2</span>Event Currency</h2><div class="curgrid">';
-    for (let t = 1; t <= 4; t++) h += '<label class="cur t' + t + '" for="in_cur' + t + '"><span class="tag t' + t + '">T' + t + '</span><input type="number" inputmode="decimal" id="in_cur' + t + '" min="0" value="' + S.cur[t - 1] + '" aria-label="Tier ' + t + ' currency"></label>';
+    for (let t = 1; t <= 4; t++) h += '<label class="cur t' + t + '" for="in_cur' + t + '"><span class="tag t' + t + '">T' + t + '</span><input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_cur' + t + '" value="' + Math.round(S.cur[t - 1]) + '" aria-label="Tier ' + t + ' currency"></label>';
     h += '</div></section>';
     // 3. Gems
     h += '<section class="panel" id="gemsPanel"><details data-k="gems"' + (isOpen('gems', true) ? ' open' : '') + '><summary><span class="stepno">3</span>Gems</summary><p class="note" id="gemNote">Gems are optional.</p>';
@@ -958,9 +994,9 @@ const Engine = (function () {
     h += '<div id="gemFields"' + (S.useGems ? '' : ' hidden') + '>';
     h += '<div class="colhead g"><span>Gem upgrade</span><span>Rec.</span><span>Level</span><span>Max</span></div>';
     const gemRow = (key, label, input) => '<div class="grow"><div class="nm">' + label + '</div><span class="rc" id="rec_' + key + '">-</span>' + input + '<span class="mx" id="max_' + key + '"></span></div>';
-    h += gemRow('hp', 'Max HP <i>+10% each</i>', '<input type="number" inputmode="numeric" min="0" id="in_ghp" value="' + S.gems.hp + '" aria-label="Max HP gem level">');
-    h += gemRow('atk', 'Attack Damage <i>+10% each</i>', '<input type="number" inputmode="numeric" min="0" id="in_gatk" value="' + S.gems.atk + '" aria-label="Attack Damage gem level">');
-    h += gemRow('speed', 'Event Speed <i>+125% each</i>', '<input type="number" inputmode="numeric" min="0" id="in_gspeed" value="' + S.gems.speed + '" aria-label="Event Speed gem level">');
+    h += gemRow('hp', 'Max HP <i>+10% each</i>', '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_ghp" value="' + S.gems.hp + '" aria-label="Max HP gem level">');
+    h += gemRow('atk', 'Attack Damage <i>+10% each</i>', '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_gatk" value="' + S.gems.atk + '" aria-label="Attack Damage gem level">');
+    h += gemRow('speed', 'Event Speed <i>+125% each</i>', '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_gspeed" value="' + S.gems.speed + '" aria-label="Event Speed gem level">');
     h += gemRow('x2', '2x Event Currency', '<input type="checkbox" id="in_gx2"' + (S.gems.x2 ? ' checked' : '') + ' aria-label="2x Event Currency owned">');
     h += '<p class="limits" id="gemLimits"></p><p class="note" id="gemSummary"></p></div></details></section>';
     // 4. Upgrades
@@ -971,7 +1007,7 @@ const Engine = (function () {
       h += '<div class="tierhead plain t' + t + '"><b>Tier ' + t + '</b><span class="tc" id="tc_' + t + '"></span></div>';
       E.BY_TIER[t].forEach(u => {
         h += '<div class="urow t' + t + '" id="row_' + u.id + '"><div class="nm">' + u.name + '</div>' +
-          '<input type="number" inputmode="numeric" min="0" id="lv_' + u.id + '" value="' + (S.lv[u.id] || 0) + '" aria-label="' + u.name + ' level">' +
+          '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="lv_' + u.id + '" value="' + (S.lv[u.id] || 0) + '" aria-label="' + u.name + ' level">' +
           '<span class="mx"></span><span class="cs"></span></div>';
       });
     }
@@ -1031,7 +1067,6 @@ const Engine = (function () {
       const m = $('#max_' + k); if (m) m.textContent = mx;
     });
     const mx2 = $('#max_x2'); if (mx2) mx2.textContent = 'yes';
-    const pEl = $('#in_P'); if (pEl && num(pEl.value, 0) > 49) { pEl.value = 49; S.P = 49; }
   }
   function renderEventInfo() {
     const es = eventState();
@@ -1044,7 +1079,11 @@ const Engine = (function () {
   }
 
   let timer = null;
-  function schedule() { clearTimeout(timer); timer = setTimeout(compute, 600); }
+  // The plan updates by itself as values change. The Update plan button only shows if a change has not been applied for a while.
+  let dirtyTimer = null, dirty = false;
+  function markDirty() { dirty = true; clearTimeout(dirtyTimer); dirtyTimer = setTimeout(() => { if (dirty) $('#updateBar').classList.add('show'); }, 4000); }
+  function clearDirty() { dirty = false; clearTimeout(dirtyTimer); $('#updateBar').classList.remove('show'); }
+  function schedule() { markDirty(); clearTimeout(timer); timer = setTimeout(compute, 600); }
   function bindNum(id, setter, hardMax) {
     const el = $('#' + id);
     if (hardMax != null) el.max = hardMax;
@@ -1060,6 +1099,7 @@ const Engine = (function () {
     let before = 0, busy = false;
     el.addEventListener('focus', () => { before = o.before(); });
     el.addEventListener('input', () => {
+      markDirty();
       if (o.hardMax != null && num(el.value, 0) > o.hardMax) el.value = o.hardMax;
       const raw = el.value.trim(), v = raw === '' ? NaN : Math.round(parseFloat(raw));
       // increases apply at once; a lower value also applies at once when it cannot trim anything else
@@ -1110,7 +1150,6 @@ const Engine = (function () {
     const el = $('#in_P'); if (!el) return;
     guardedField(el, {
       before: () => normalized().P,
-      hardMax: 49,
       commit: v => { S.P = v; },
       always: false,
       affected: v => {
@@ -1123,7 +1162,7 @@ const Engine = (function () {
     });
   }
   function wire() {
-    document.querySelectorAll('#inputs input[type=number]').forEach(el => {
+    document.querySelectorAll('#inputs input.int').forEach(el => {
       el.setAttribute('autocomplete', 'off'); el.setAttribute('enterkeyhint', 'done');
       el.addEventListener('focus', () => setTimeout(() => { try { el.select(); } catch (e) { /* ignore */ } }, 0)); // easy to overwrite on a phone
     });
@@ -1147,11 +1186,11 @@ const Engine = (function () {
       }
       $('#manualTime').hidden = !S.manual; save(); renderEventInfo(); compute();
     });
-    $('#btnCalcMobile').addEventListener('click', () => { setTab('plan'); window.scrollTo(0, 0); compute(); });
+
   }
   $('#btnReset').addEventListener('click', () => {
     if (!window.confirm('Reset every input to its default?')) return;
-    const tab = S.ui.tab; S = defaults(); S.ui.tab = tab; save(); lastGemInfo = null; buildInputs(); compute();
+    const keep = S.ui; S = defaults(); S.ui = keep; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
   });
   // Plan / Setup tabs (phones and narrow windows only; wide screens show both)
   function setTab(t) {
@@ -1256,6 +1295,7 @@ const Engine = (function () {
   function setBusy(b) { $('#top').classList.toggle('busy', b); }
   function compute() {
     clearTimeout(timer);
+    clearDirty();
     const my = ++token;
     const n = normalized();
     setBusy(true);
@@ -1287,7 +1327,7 @@ const Engine = (function () {
     return steps;
   }
   function syncInputs() {
-    for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el) el.value = S.cur[t - 1]; }
+    for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el) el.value = Math.round(S.cur[t - 1]); }
     E.UPG.forEach(u => { const el = $('#lv_' + u.id); if (el) el.value = S.lv[u.id] || 0; });
   }
   function shortClock(ms) {
@@ -1303,7 +1343,9 @@ const Engine = (function () {
     return 'in ' + Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
   }
 
-  /* ---------- live check-in time: when you will hold enough for the next upgrade set ---------- */
+  /* ---------- waiting for currency: when you will hold enough for the next upgrade set ---------- */
+  // Boxes the player has typed into. A typed box keeps the player's number; the other boxes keep following the estimate.
+  let OV = [null, null, null, null];
   function ciModel() {
     const n = normalized();
     const pend = PLAN.steps.filter(s => !s.done);
@@ -1313,15 +1355,13 @@ const Engine = (function () {
     const inc = E.incomePerRun(prof.cleared, n.gems, st2);
     return { n, pend, rate: inc.map(v => v / prof.runH) };
   }
-  function dynCheckin(heldOverride) {
+  function dynCheckin() {
     const m = ciModel(), now = Date.now();
-    let held;
-    if (heldOverride) held = heldOverride.slice();                       // what the player typed as held right now
-    else {
-      const hrs = clamp((now - (S.curAt || now)) / 3600000, 0, 72);      // currency earned since it was last confirmed
-      held = m.n.cur.map((c, k) => c + m.rate[k] * hrs);
-      m.pend.forEach(s => { held[s.tier - 1] -= s.cost; });              // minus what the pending purchases will spend
-    }
+    const hrs = clamp((now - (S.curAt || now)) / 3600000, 0, 72);      // currency earned since it was last confirmed
+    const held = m.n.cur.map((c, k) => c + m.rate[k] * hrs);
+    m.pend.forEach(s => { held[s.tier - 1] -= s.cost; });              // minus what the pending purchases will spend
+    const est = held.slice();
+    if (PLAN.view === 'checkin') for (let k = 0; k < 4; k++) if (OV[k] != null) held[k] = OV[k];   // the player's own numbers win
     const need = [0, 0, 0, 0];
     if (PLAN.nextEv) PLAN.nextEv.buys.forEach(b => { need[b.tier - 1] += b.cost; });
     const hasSet = need.some(v => v > 0);
@@ -1334,12 +1374,12 @@ const Engine = (function () {
     } else t = PLAN.nextWait;
     t = clamp(stuck ? 48 : t, 0, 48);
     if (t < 1 / 60) t = 0;
-    return { t, at: now + t * 3600000, need, held, hasSet };
+    return { t, at: now + t * 3600000, need, held, est, hasSet };
   }
   function ciNeedText(ci) {
-    if (!ci.hasSet) return 'Nothing worth buying before then.';
-    if (ci.t <= 0) return 'You hold enough for the next set (' + curLine(ci.need) + '). Enter your currency and press Check-in done.';
-    return 'To afford the next set: ' + curLine(ci.need) + '.';
+    if (!ci.hasSet) return 'Nothing worth buying yet, so give the game a little more time.';
+    if (ci.t <= 0) return 'You should hold enough for the next set (' + curLine(ci.need) + '). Enter your currency if you like, then press Show my upgrade set.';
+    return 'Let your game run so currency builds up. The next set needs ' + curLine(ci.need) + '.';
   }
   function updateStatusCheckin() {
     if (!PLAN) return;
@@ -1347,13 +1387,13 @@ const Engine = (function () {
     if (PLAN.view === 'prestige') { lab.textContent = 'Next step'; big.textContent = 'Prestige'; sub.textContent = 'at wave ' + PLAN.target + ' for P' + PLAN.tier; return; }
     if (PLAN.view === 'finish') { lab.textContent = 'Next step'; big.textContent = 'Goal run'; sub.textContent = 'W' + PLAN.n.goal; return; }
     const ci = PLAN.ci; if (!ci) return;
-    lab.textContent = 'Next check-in';
-    big.textContent = fmtIn(ci.at - Date.now()).replace(/^in /, '');
-    sub.textContent = ci.t <= 0 ? 'You can buy the next set' : shortClock(ci.at);
+    lab.textContent = 'Next upgrade set';
+    big.textContent = ci.t <= 0 ? 'Ready' : fmtIn(ci.at - Date.now()).replace(/^in /, '');
+    sub.textContent = ci.t <= 0 ? 'Enter your currency' : 'Ready around ' + shortClock(ci.at);
   }
   function updateCiText() {
     const ci = PLAN && PLAN.ci; if (!ci) return;
-    const clockEl = $('#ciClock'); if (clockEl) clockEl.textContent = ci.t <= 0 ? 'Check in now' : shortClock(ci.at);
+    const clockEl = $('#ciClock'); if (clockEl) clockEl.textContent = ci.t <= 0 ? 'Ready now' : 'Ready around ' + shortClock(ci.at);
     const cd = $('#ciCd'); if (cd) { cd.dataset.at = ci.at; cd.textContent = fmtIn(ci.at - Date.now()); cd.hidden = ci.t <= 0; }
     const nd = $('#ciNeed'); if (nd) nd.textContent = ciNeedText(ci);
     updateStatusCheckin();
@@ -1361,16 +1401,19 @@ const Engine = (function () {
   function tick() {
     renderEventInfo();
     if (!PLAN) return;
-    if (PLAN.view === 'checkin' && !PLAN.boxDirty) {
+    if (PLAN.view === 'checkin') {
       PLAN.ci = dynCheckin();
-      for (let t = 1; t <= 4; t++) { const el = $('#nx_c' + t); if (el && document.activeElement !== el) el.value = Math.max(0, Math.round(PLAN.ci.held[t - 1])); }
+      for (let t = 1; t <= 4; t++) {
+        const el = $('#nx_c' + t);
+        if (el && OV[t - 1] == null && document.activeElement !== el) el.value = Math.max(0, Math.round(PLAN.ci.est[t - 1]));   // never overwrite a number the player typed
+      }
       updateCiText();
     }
     document.querySelectorAll('.cd[data-at]').forEach(el => { el.textContent = fmtIn(+el.dataset.at - Date.now()); if (el.id === 'ciCd') el.hidden = !!(PLAN.ci && PLAN.ci.t <= 0); });
     updateStatusCheckin();
   }
 
-  /* ---------- Next step: one panel that follows the plan (buy, then check in or prestige) ---------- */
+  /* ---------- Next step: one panel that follows the plan (buy, then wait or prestige) ---------- */
   function renderStep() {
     const el = $('#stepPanel'); if (!el || !PLAN) return;
     const steps = PLAN.steps;
@@ -1378,7 +1421,6 @@ const Engine = (function () {
     const n = normalized();
     const st = E.computeStats(n.P, n.gems, n.lv);
     const prof = E.evalBuild(st, PLAN.target, 0);
-    PLAN.boxDirty = false;
     if (pending) PLAN.view = 'buy';
     else if (prof.capable && PLAN.tier == null) PLAN.view = 'finish';
     else if (prof.capable) PLAN.view = 'prestige';
@@ -1401,11 +1443,11 @@ const Engine = (function () {
         '<div class="row2"><button type="button" class="primary" id="btnPrestigeDone">Prestige done</button></div>';
     } else {
       const ci = PLAN.ci;
-      h = '<h2>Next check-in</h2><div class="waitbig" id="ciClock">' + (ci.t <= 0 ? 'Check in now' : shortClock(ci.at)) + '</div>' +
+      h = '<h2>Next upgrade set</h2><div class="waitbig" id="ciClock">' + (ci.t <= 0 ? 'Ready now' : 'Ready around ' + shortClock(ci.at)) + '</div>' +
         '<div class="cdline"><b class="cd" id="ciCd"' + (ci.t <= 0 ? ' hidden' : '') + ' data-at="' + ci.at + '">' + fmtIn(ci.at - Date.now()) + '</b> <span id="ciNeed">' + ciNeedText(ci) + '</span></div>' +
-        '<div class="nxlabel">Currency you hold now</div><div class="nxrow">' +
-        [1, 2, 3, 4].map(t => '<label class="nf t' + t + '"><b>T' + t + '</b><input type="number" inputmode="decimal" min="0" id="nx_c' + t + '" value="' + Math.max(0, Math.round(ci.held[t - 1])) + '" autocomplete="off" enterkeyhint="done"></label>').join('') + '</div>' +
-        '<div class="row2"><button type="button" class="primary" id="btnCheckinDone">Check-in done</button></div>';
+        '<div class="nxlabel">Currency you hold. These fill in with estimates from your expected gains. Type a number to use your own.</div><div class="nxrow">' +
+        [1, 2, 3, 4].map(t => '<label class="nf t' + t + '"><b>T' + t + '</b><input class="int" type="text" inputmode="numeric" pattern="[0-9]*" id="nx_c' + t + '" value="' + Math.max(0, Math.round(ci.held[t - 1])) + '" autocomplete="off" enterkeyhint="done"></label>').join('') + '</div>' +
+        '<div class="row2"><button type="button" class="primary" id="btnCheckinDone">Show my upgrade set</button></div>';
     }
     el.innerHTML = h;
     el.querySelectorAll('.donebtn').forEach(b => b.addEventListener('click', () => doneStep(+b.getAttribute('data-step'))));
@@ -1416,17 +1458,19 @@ const Engine = (function () {
       const box = $('#nx_c' + t); if (!box) return;
       box.addEventListener('focus', () => setTimeout(() => { try { box.select(); } catch (e) { /* ignore */ } }, 0));
       box.addEventListener('input', () => {
-        PLAN.boxDirty = true;
-        PLAN.ci = dynCheckin([1, 2, 3, 4].map(k => Math.max(0, num($('#nx_c' + k).value, 0))));   // the time to check in follows what you type
+        const raw = box.value.trim();
+        OV[t - 1] = raw === '' ? null : parseInt(raw, 10);          // typing marks this box as the player's own number
+        PLAN.ci = dynCheckin();
         updateCiText();
       });
+      box.addEventListener('blur', () => { if (OV[t - 1] == null && PLAN.ci) box.value = Math.max(0, Math.round(PLAN.ci.est[t - 1])); });
     });
     updateStatusCheckin();
     renderPlan();
   }
   function applyStep(i) {
     const s = PLAN.steps[i]; if (s.done) return;
-    S.cur[s.tier - 1] = Math.max(0, Math.round((num(S.cur[s.tier - 1], 0) - s.cost) * 100) / 100);
+    S.cur[s.tier - 1] = Math.max(0, Math.round(num(S.cur[s.tier - 1], 0) - s.cost));
     S.lv[s.id] = s.to;
     S.curAt = Date.now();
     s.done = true;
@@ -1434,16 +1478,18 @@ const Engine = (function () {
   function finishStepUpdate() { syncInputs(); save(); refreshRows(); renderStep(); }
   function doneStep(i) { applyStep(i); finishStepUpdate(); }
   function checkinDone() {
-    for (let t = 1; t <= 4; t++) S.cur[t - 1] = Math.max(0, num($('#nx_c' + t).value, 0));
+    for (let t = 1; t <= 4; t++) S.cur[t - 1] = Math.max(0, parseInt($('#nx_c' + t).value, 10) || 0);
+    OV = [null, null, null, null];
     S.lastCheckin = Date.now(); S.curAt = S.lastCheckin;
     syncInputs(); save(); refreshRows(); compute();
   }
   function prestigeDone() {
+    OV = [null, null, null, null];
     S.P = PLAN.tier; S.lv = {}; S.cur = [0, 0, 0, 0]; S.lastCheckin = null; S.curAt = Date.now();
     save(); buildInputs(); compute();
   }
 
-  /* ---------- Upgrade Plan: always the next upgrade set and the next check-in ---------- */
+  /* ---------- Upgrade Plan: always the next upgrade set and the wait before it ---------- */
   function buildBlocks(ev) {
     const out = []; let prevT = ev[0].t;
     ev.slice(1).forEach(e => {
@@ -1462,9 +1508,9 @@ const Engine = (function () {
     if (b.type === 'checkin') {
       if (live && PLAN.ci) {
         const ci = PLAN.ci;
-        return '<div class="tl chk"><div class="tlh">Check in</div><div class="tlw"><span class="cd" data-at="' + ci.at + '">' + fmtIn(ci.at - Date.now()) + '</span> &middot; ' + (ci.t <= 0 ? 'now' : shortClock(ci.at)) + '</div><p>' + ciNeedText(ci) + '</p></div>';
+        return '<div class="tl chk"><div class="tlh">Let currency build</div><div class="tlw"><span class="cd" data-at="' + ci.at + '">' + fmtIn(ci.at - Date.now()) + '</span> &middot; ' + (ci.t <= 0 ? 'ready now' : 'ready around ' + shortClock(ci.at)) + '</div><p>' + ciNeedText(ci) + '</p></div>';
       }
-      return '<div class="tl chk"><div class="tlh">Check in</div><div class="tlw">About ' + durShort(b.gap) + ' after the set above</div><p>Hold about ' + curLine(e.before) + '.</p></div>';
+      return '<div class="tl chk"><div class="tlh">Let currency build</div><div class="tlw">About ' + durShort(b.gap) + ' after the set above</div><p>You should hold about ' + curLine(e.before) + '.</p></div>';
     }
     const m = mergeSteps(e.buys);
     if (!m.length) return '<div class="tl buyc quiet"><div class="tlh">Upgrade set</div><p>Nothing worth buying yet. You should still clear about ' + wl(e.x) + '.</p></div>';
@@ -1505,7 +1551,7 @@ const Engine = (function () {
     const nextEv = ev[1] && ev[1].type === 'checkin' ? ev[1] : null;
     PLAN = { steps: mergeSteps(first.buys), target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev), n, R };
 
-    // one-line summary under the Check-in interval setting
+    // one-line summary under the time-between-sets setting
     const sets = ev.filter(e => e.type === 'checkin' && e.buys.length).length;
     lastIvDesc = (S.goal > 1000 ? 'Planned as W1000, the furthest the model covers. ' : '') + 'Expected max wave W' + res.maxWave + ' in ' + sets + ' upgrade sets' +
       (res.attainable ? ', done in about ' + dur(res.completionH) + '.' : '. W' + n.goal + ' is out of reach in time.');
@@ -1516,36 +1562,14 @@ const Engine = (function () {
     html.push('<section class="panel" id="planPanel"></section>');
     let h = '';
 
-    // prestige path
-    const pres = ev.filter(e => e.type === 'prestige');
-    const PI = R.pathInfo;
-    h = '';
-    if (PI && PI.used) {
-      const o = PI.origChosen;
-      const gain = o.attainable && res.attainable ? 'about ' + dur(o.completionH - res.completionH) + ' faster than' : (res.attainable ? 'reaches W' + n.goal + ' where you would otherwise fall short on' : 'reaches W' + res.maxWave + ' instead of W' + o.maxWave + ' on');
-      h += '<p><b>Suggested: ' + PI.used.name + '</b>, ' + gain + ' the standard route (P40 at W205, P46 at W235).</p>';
-    } else if (PI) h += '<p>The standard route (P40 at W205, P46 at W235) is the fastest of the routes tried.</p>';
-    if (PI) {
-      h += '<details data-k="routes"' + (isOpen('routes', false) ? ' open' : '') + ' style="margin:6px 0 10px"><summary>Routes tried</summary><div class="scroll"><table><tr><th>Route</th><th>' + (PI.origFast.attainable || PI.tried.some(x => x.r.attainable) ? 'Finish' : 'Max wave') + '</th></tr>';
-      const rowT = (name, r, sel) => '<tr class="' + (sel ? 'isrec' : '') + '"><td>' + name + (sel ? ' (used)' : '') + '</td><td>' + (r.attainable ? dur(r.completionH) : 'W' + r.maxWave) + '</td></tr>';
-      h += rowT('Standard', PI.origFast, !PI.used);
-      PI.tried.forEach(x => { h += rowT(x.a.name, x.r, PI.used === x.a); });
-      h += '</table></div><p class="note">Compared with 2 hour check-ins.</p></details>';
-    }
-    if (!pres.length) h += '<p>No prestige is needed before the goal wave.</p>';
-    else {
-      h += '<div class="scroll"><table><tr><th>Prestige</th><th>At wave</th><th>Around</th><th>Damage</th><th>Max HP</th><th>Atk speed</th></tr>';
-      pres.forEach(p => { h += '<tr><td>P' + p.from + ' to P' + p.to + '</td><td>W' + p.wave + '</td><td>' + clock(n.T0 + p.t * 3600000) + '</td><td>' + fmt(p.stats.dmg) + '</td><td>' + fmt(p.stats.hp) + '</td><td>' + f2(p.stats.as) + '</td></tr>'; });
-      h += '</table></div>';
-    }
-    html.push(det('path', 'Prestige Path', h, false));
-
     // stats and breakpoints
     const stNow = E.computeStats(n.P, n.gems, n.lv);
     const lvAfter = Object.assign({}, n.lv);
     first.buys.forEach(b => { lvAfter[b.id] = b.to; });
     const stNext = E.computeStats(n.P, n.gems, lvAfter);
-    const rowsS = [['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
+    const rNow = E.evalBuild(stNow, 1001, 0), rNext = E.evalBuild(stNext, 1001, 0);
+    const runDur = h => { const s = Math.round(h * 3600), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return hh ? hh + 'h ' + mm + 'm' : mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's'; };
+    const rowsS = [['Theoretical max wave', rNow.x, rNext.x, wl], ['Average run length', rNow.runH, rNext.runH, runDur], ['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
       ['Move speed', stNow.ms, stNext.ms, f2], ['Event speed', stNow.ev, stNext.ev, v => f2(v) + 'x'], ['Crit chance', stNow.cc, stNext.cc, v => f2(v) + '%'],
       ['Crit damage', stNow.cd, stNext.cd, v => f2(v) + 'x'], ['Block chance', stNow.blk, stNext.blk, v => f2(v) + '%'],
       ['Prestige multiplier', stNow.mult, stNext.mult, v => f2(v) + 'x'], ['Enemy attack speed cut', stNow.eas, stNext.eas, v => '-' + f2(v)], ['Enemy damage cut', stNow.edmg, stNext.edmg, v => '-' + f2(v)]];
@@ -1566,17 +1590,18 @@ const Engine = (function () {
     html.push(det('stats', 'Stats and Breakpoints', h, false));
 
     html.push(det('how', 'How it works',
-      '<ul class="plain">' +
-      '<li><b>Event time.</b> Events run from 10 PM UTC (3 PM PDT) on the last day of the month before to 10 PM UTC on the last day of Feb, Apr, Jun, Aug, Oct and Dec. Time left comes from your device clock.</li>' +
-      '<li><b>Runs.</b> Each run starts on W1 with full HP and your current upgrades. Purchases apply from the next run. Upgrades and currency reset only when you prestige. Fights count down from 5 to 1, so "W27-2" means W27-5 through W27-2 are cleared.</li>' +
-      '<li><b>Combat.</b> Your swing timer resets every fight, and crits are real random hits. The enemy swing timer carries across fights and waves. Event speed scales both sides, so it changes pace, not damage taken. Each fight also costs about 6.28 s of movement divided by move speed, all divided by event speed.</li>' +
-      '<li><b>Accuracy.</b> Fitted to real P4 runs (W24-5 in 3:06, W27-2 in 3:14, W27-1 in 3:15) and checked against a fresh P5 gems-only run (predicted W8-4 in 85 s, seen W8-4 in about 84 s) and a real P39 W250 clear (model needs about 93k HP, the run had 89k). Real runs vary by about 1 to 2 fights.</li>' +
-      '<li><b>Income.</b> Expected values, including the 2x gem and the 5x chance.</li>' +
-      '<li><b>Prestige.</b> The multiplier is 1 + tier x (10% + Prestige Bonus upgrades), confirmed by that P39 build. The route search picks the fastest of several end-game routes and falls back to the standard one.</li>' +
-      '<li><b>Buying.</b> Each check-in buys the best gain per currency. Attack is bought in counts that land on a one-hit breakpoint and stops at 7 x target wave - 3 (capped at 704 from P10). HP is deprioritized past 150k in end-game phases, enemy reductions only while they matter, and Prestige Bonus once HP and attack are capped. A row unlocks after 1 level of the row above, and cap upgrades come before the levels they raise.</li>' +
-      '<li><b>Check-in time.</b> It is when you will hold enough for the next upgrade set, and it updates as you type your currency. Auto mode sets the gaps between the planned sets.</li>' +
-      '<li><b>Gems.</b> The recommendation is the cheapest set, from zero, that reaches your goal with at least 10% of the event spare. It ignores the levels you entered.</li>' +
-      '</ul>', false));
+      '<h3>Set up once</h3><ol class="plain">' +
+      '<li><b>Event Settings:</b> set your wave goal. The time left comes from your device clock.</li>' +
+      '<li><b>Prestige:</b> enter your current prestige tier.</li>' +
+      '<li><b>Event Currency:</b> enter the currency you hold right now.</li>' +
+      '<li><b>Gems:</b> tick Use gems if you own gem upgrades, then enter your levels. The Rec. column shows the cheapest levels that still reach your goal in time.</li>' +
+      '<li><b>Upgrades:</b> enter the level of every upgrade you own. Locked rows open with your prestige tier or once the row above has a level.</li>' +
+      '</ol><h3 style="margin-top:12px">Then, every round</h3><ol class="plain">' +
+      '<li>Under <b>Buy now</b>, buy each upgrade in the game and press Done.</li>' +
+      '<li>Let the game run until the time shown, so your event currency builds up.</li>' +
+      '<li>The currency boxes fill in with an estimate. Type your real amounts if you like. A box you type in keeps your number. Then press <b>Show my upgrade set</b>.</li>' +
+      '<li>When the planner says <b>Prestige</b>, prestige in the game and press Prestige done.</li>' +
+      '</ol><p class="note" style="margin-top:10px">You only need to come back to Setup when something changes outside the planner, such as new gem levels. Use Import/Export at the top to move your setup to another device.</p>', false));
 
     $('#results').innerHTML = html.join('');
     renderStep();
@@ -1673,6 +1698,159 @@ const Engine = (function () {
     }
     step();
   }
+
+  /* ---------- whole numbers only ---------- */
+  let tipEl = null, tipTimer = null;
+  function numTip(el) {
+    if (!tipEl) { tipEl = document.createElement('div'); tipEl.id = 'numTip'; tipEl.setAttribute('role', 'status'); document.body.appendChild(tipEl); }
+    tipEl.textContent = 'Numbers only';
+    const r = el.getBoundingClientRect();
+    tipEl.style.left = Math.max(8, Math.min(window.innerWidth - 130, r.left + window.scrollX)) + 'px';
+    tipEl.style.top = (r.bottom + window.scrollY + 6) + 'px';
+    tipEl.classList.add('show');
+    clearTimeout(tipTimer); tipTimer = setTimeout(() => tipEl.classList.remove('show'), 1800);
+  }
+  const isInt = el => el instanceof HTMLInputElement && el.classList.contains('int');
+  document.addEventListener('beforeinput', e => {
+    const el = e.target; if (!isInt(el) || !e.inputType || e.inputType.indexOf('insert') !== 0) return;
+    let data = e.data;
+    if (data == null && e.dataTransfer) data = e.dataTransfer.getData('text');
+    if (data && /\D/.test(data)) {
+      e.preventDefault(); numTip(el);                       // the key never lands, and the field keeps focus
+      const digits = data.replace(/\D/g, '');               // a pasted "1,500" still gives 1500
+      if (digits) { el.setRangeText(digits, el.selectionStart, el.selectionEnd, 'end'); el.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+  }, true);
+  document.addEventListener('input', e => {                 // safety net for keyboards that do not report the typed character
+    const el = e.target; if (!isInt(el)) return;
+    const v = el.value, clean = v.replace(/\D/g, '');
+    if (v !== clean) {
+      const pos = Math.max(0, (el.selectionStart == null ? clean.length : el.selectionStart) - (v.length - clean.length));
+      el.value = clean; try { el.setSelectionRange(pos, pos); } catch (err) { /* ignore */ }
+      numTip(el);
+    }
+  }, true);
+
+  /* ---------- light / dark mode ---------- */
+  const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function effectiveTheme() { return S.ui.theme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+  function applyTheme() {
+    const t = effectiveTheme();
+    document.documentElement.setAttribute('data-theme', t);
+    const b = $('#btnTheme');
+    if (b) { b.innerHTML = t === 'dark' ? SUN : MOON; b.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); b.title = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'; }
+  }
+  $('#btnTheme').addEventListener('click', () => { S.ui.theme = effectiveTheme() === 'dark' ? 'light' : 'dark'; save(); applyTheme(); });
+  if (window.matchMedia) { try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!S.ui.theme) applyTheme(); }); } catch (e) { /* older browsers */ } }
+  applyTheme();
+
+  /* ---------- setup code: a short string that carries the whole setup to another device ---------- */
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  function putVar(arr, n) { n = Math.max(0, Math.floor(n)); while (n >= 128) { arr.push((n % 128) | 128); n = Math.floor(n / 128); } arr.push(n); }
+  function getVar(bytes, pos) {
+    let n = 0, mul = 1, b;
+    do { if (pos.i >= bytes.length) throw new Error('short'); b = bytes[pos.i++]; n += (b & 127) * mul; mul *= 128; } while (b & 128);
+    return n;
+  }
+  function csum(bytes) { let c = 17; for (const b of bytes) c = (c * 31 + b) & 255; return c; }
+  function bytesToB64(bytes) {
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+      const b0 = bytes[i], b1 = i + 1 < bytes.length ? bytes[i + 1] : 0, b2 = i + 2 < bytes.length ? bytes[i + 2] : 0, n = (b0 << 16) | (b1 << 8) | b2;
+      out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63];
+      if (i + 1 < bytes.length) out += B64[(n >> 6) & 63];
+      if (i + 2 < bytes.length) out += B64[n & 63];
+    }
+    return out;
+  }
+  function b64ToBytes(s) {
+    const bytes = [];
+    for (let i = 0; i < s.length; i += 4) {
+      const v = Array.from(s.slice(i, i + 4)).map(c => { const k = B64.indexOf(c); if (k < 0) throw new Error('char'); return k; });
+      if (v.length === 1) throw new Error('length');
+      const n = (v[0] << 18) | (v[1] << 12) | ((v[2] || 0) << 6) | (v[3] || 0);
+      bytes.push((n >> 16) & 255);
+      if (v.length > 2) bytes.push((n >> 8) & 255);
+      if (v.length > 3) bytes.push(n & 255);
+    }
+    return bytes;
+  }
+  function exportCode() {
+    const n = normalized();
+    const iv = n.interval === 'auto' ? 0 : INTERVALS.indexOf(n.interval) + 1;
+    const bytes = [1, (S.useGems ? 1 : 0) | (n.ownedGems.x2 ? 2 : 0) | (Math.max(0, iv) << 2)];
+    putVar(bytes, n.P); putVar(bytes, n.goal);
+    putVar(bytes, n.ownedGems.hp); putVar(bytes, n.ownedGems.atk); putVar(bytes, n.ownedGems.speed);
+    n.cur.forEach(c => putVar(bytes, Math.round(c)));
+    let zeros = 0;                                                   // runs of zero levels cost one byte
+    E.UPG.forEach(up => {
+      const L = Math.min(127, n.lv[up.id]);
+      if (L === 0) { if (++zeros === 127) { bytes.push(128 | zeros); zeros = 0; } }
+      else { if (zeros) { bytes.push(128 | zeros); zeros = 0; } bytes.push(L); }
+    });
+    if (zeros) bytes.push(128 | zeros);
+    bytes.push(csum(bytes));
+    return bytesToB64(bytes);
+  }
+  function parseCode(str) {
+    const s = str.replace(/\s+/g, '');
+    if (!s) throw new Error('empty');
+    const bytes = b64ToBytes(s);
+    if (bytes.length < 10) throw new Error('short');
+    const ck = bytes.pop();
+    if (csum(bytes) !== ck) throw new Error('check');
+    const pos = { i: 0 };
+    if (bytes[pos.i++] !== 1) throw new Error('version');
+    const flags = bytes[pos.i++];
+    const o = { useGems: !!(flags & 1), x2: flags & 2 ? 1 : 0, iv: flags >> 2 };
+    o.P = getVar(bytes, pos); o.goal = getVar(bytes, pos);
+    o.hp = getVar(bytes, pos); o.atk = getVar(bytes, pos); o.speed = getVar(bytes, pos);
+    o.cur = [0, 1, 2, 3].map(() => getVar(bytes, pos));
+    o.lv = [];
+    while (o.lv.length < E.UPG.length) {
+      if (pos.i >= bytes.length) throw new Error('short');
+      const b = bytes[pos.i++];
+      if (b & 128) for (let k = 0; k < (b & 127); k++) o.lv.push(0); else o.lv.push(b);
+    }
+    if (o.lv.length !== E.UPG.length || pos.i !== bytes.length) throw new Error('size');
+    return o;
+  }
+  function applyCode(o) {
+    S.P = o.P; S.goal = Math.max(5, o.goal);
+    S.interval = o.iv >= 1 && o.iv <= INTERVALS.length ? String(INTERVALS[o.iv - 1]) : 'auto';
+    S.useGems = o.useGems; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
+    S.cur = o.cur.slice(); S.lv = {}; E.UPG.forEach((up, i) => { S.lv[up.id] = o.lv[i]; });
+    S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null];
+    save(); lastGemInfo = null; buildInputs(); compute();
+  }
+  const dlg = $('#codeDlg');
+  $('#btnCode').addEventListener('click', () => {
+    $('#cdOut').value = exportCode(); $('#cdIn').value = ''; $('#cdCopied').textContent = ''; $('#cdMsg').textContent = '';
+    dlg.showModal();
+  });
+  $('#cdClose').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+  $('#cdCopy').addEventListener('click', () => {
+    const out = $('#cdOut'), done = () => { $('#cdCopied').textContent = 'Copied'; };
+    out.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(out.value).then(done, () => { try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ } });
+    else { try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ } }
+  });
+  $('#cdImport').addEventListener('click', () => {
+    const msg = $('#cdMsg');
+    let o;
+    try { o = parseCode($('#cdIn').value); } catch (e) { msg.textContent = 'That code does not look right. Check that all of it was copied.'; return; }
+    if (!window.confirm('Replace your current setup with this code?')) return;
+    applyCode(o); dlg.close();
+  });
+
+  /* ---------- manual update fallback ---------- */
+  $('#btnUpdate').addEventListener('click', () => {
+    const a = document.activeElement; if (a && a.blur) a.blur();
+    if (window.matchMedia('(max-width: 900px)').matches) { setTab('plan'); window.scrollTo(0, 0); }
+    compute();
+  });
 
   buildInputs();
   compute();
