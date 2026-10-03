@@ -185,6 +185,8 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 .nxrow label.nf input { flex: 1; min-width: 0; width: 100%; }
 
 
+.setupnote { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 0 0 12px; }
+.buy .cost::before { content: "cost: "; font-weight: 400; color: var(--muted); }
 /* ---------- header buttons, setup-code dialog, number tip, update bar ---------- */
 .hbtns { display: flex; gap: 8px; align-items: center; }
 .hbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 38px; padding: 6px 12px; }
@@ -201,6 +203,32 @@ dialog .row2 { margin-top: 8px; }
 .updatebar.show { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; justify-content: center; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); border-top: 1px solid var(--line); }
 .updatebar button { width: 100%; max-width: 420px; }
 .hlabel { display: inline; }
+
+
+/* ---------- change log flyout ---------- */
+.hbtn { position: relative; }
+.newdot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); border: 2px solid var(--surface2); }
+dialog.flyout { margin: 0 0 0 auto; padding: 0; height: 100vh; height: 100dvh; max-height: none; width: min(440px, 100vw); border-radius: 14px 0 0 14px; }
+dialog.flyout[open] { display: flex; flex-direction: column; animation: flyin .22s ease-out; }
+@keyframes flyin { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+.fly-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px 4px; }
+.fly-head h2 { margin: 0; }
+.fly-note { padding: 0 18px; margin-bottom: 4px; }
+#logBody { overflow-y: auto; padding: 0 18px 22px; flex: 1; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.log-entry { padding: 14px 0 6px; border-top: 1px solid var(--line); }
+.log-entry:first-child { border-top: 0; }
+.log-date { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.log-title { font-family: 'Bricolage Grotesque', 'Segoe UI', sans-serif; font-weight: 700; font-size: 16.5px; margin: 1px 0 8px; }
+ul.log { list-style: none; margin: 0; padding: 0; }
+ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: 14px; line-height: 1.45; }
+.lchip { flex: none; width: 70px; text-align: center; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface2); color: var(--muted); }
+.lchip.new { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lchip.fix { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+@media (max-width: 700px) {
+  dialog.flyout { margin: auto 0 0 0; height: auto; max-height: 86vh; max-height: 86dvh; width: 100%; border-radius: 16px 16px 0 0; }
+  dialog.flyout[open] { animation-name: sheetin; }
+  @keyframes sheetin { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
 
 /* ---------- tablet and phone ---------- */
 @media (max-width: 900px) {
@@ -219,7 +247,7 @@ dialog .row2 { margin-top: 8px; }
   .grid[data-tab="setup"] #results { display: none; }
   .hlabel { display: none; }
   .hbtn { min-width: var(--tap); padding: 6px 10px; }
-  h1 { font-size: 24px; }
+  h1 { font-size: 21px; }
   .top-head .sub { display: none; }
   .top-head { align-items: center; flex-wrap: nowrap; }
 }
@@ -246,7 +274,7 @@ dialog .row2 { margin-top: 8px; }
   .urow.locked input { display: none; }
   .buy { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "tag nm done" "tag cost done"; column-gap: 10px; row-gap: 2px; padding: 12px 0; }
   .buy > .tag { grid-area: tag; align-self: start; margin-top: 3px; } .buy > .nm { grid-area: nm; }
-  .buy > .cost { grid-area: cost; text-align: left; font-size: 13px; font-weight: 500; color: var(--muted); } .buy > .cost::before { content: "cost "; }
+  .buy > .cost { grid-area: cost; text-align: left; font-size: 13px; font-weight: 500; color: var(--muted); } 
   .buy > .donebtn { grid-area: done; align-self: center; min-width: 84px; }
 }
 /* touch devices: 16px text stops iOS zooming into fields, and every control is at least 44px tall */
@@ -269,8 +297,9 @@ dialog .row2 { margin-top: 8px; }
       <p class="sub">Enter your prestige, currency and upgrades. The planner works out what to buy and when to buy it.</p>
     </div>
     <div class="hbtns">
+      <button id="btnLog" class="hbtn" type="button" aria-label="Change log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span class="hlabel">Change log</span><span class="newdot" id="logDot" hidden></span></button>
       <button id="btnTheme" class="hbtn" type="button" aria-label="Switch theme"></button>
-      <button id="btnCode" class="hbtn" type="button" aria-label="Import/Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg><span class="hlabel">Import/Export</span></button>
+      <button id="btnCode" class="hbtn" type="button" aria-label="Import or export your setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg><span class="hlabel">Import/Export</span></button>
       <button id="btnReset" class="hbtn" type="button" aria-label="Reset all inputs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="hlabel">Reset</span></button>
     </div>
   </header>
@@ -295,14 +324,21 @@ dialog .row2 { margin-top: 8px; }
     <main id="results" aria-live="polite"></main>
   </div>
   <div class="updatebar" id="updateBar"><button class="primary" type="button" id="btnUpdate">Update plan</button></div>
+  <div class="updatebar" id="setupBar"><button class="primary" type="button" id="btnSetup">Setup complete</button></div>
 </div>
+<dialog id="logDlg" class="flyout" aria-labelledby="logTitle">
+  <div class="fly-head"><h2 id="logTitle">Change log</h2><button type="button" class="hbtn" id="logClose" aria-label="Close change log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div id="logBody"></div>
+</dialog>
 <dialog id="codeDlg" aria-labelledby="cdTitle">
   <h2 id="cdTitle">Import/Export</h2>
+  <h3 style="margin-top:8px">Export</h3>
   <p class="note">Copy this code to bring your setup to another device.</p>
-  <textarea id="cdOut" readonly rows="2" aria-label="Your setup code"></textarea>
+  <textarea id="cdOut" readonly rows="2" aria-label="Your export code"></textarea>
   <div class="row2"><button class="primary" type="button" id="cdCopy">Copy code</button><span class="note" id="cdCopied" role="status"></span></div>
-  <h3>Import a code</h3>
-  <textarea id="cdIn" rows="2" placeholder="Paste a code here" aria-label="Setup code to import" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  <h3>Import</h3>
+  <p class="note">Paste a code from another device. It replaces your current setup.</p>
+  <textarea id="cdIn" rows="2" placeholder="Paste a code here" aria-label="Code to import" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
   <div class="row2"><button type="button" id="cdImport">Import</button><span class="note" id="cdMsg" role="status"></span></div>
   <div class="row2" style="justify-content:flex-end;margin-top:14px"><button type="button" id="cdClose">Close</button></div>
 </dialog>
@@ -860,6 +896,7 @@ const Engine = (function () {
   } catch (e) { /* storage unavailable */ }
   S.ui = S.ui || {};
   S.curAt = S.curAt || S.lastCheckin || Date.now();
+  if (S.ui.setupDone === undefined) S.ui.setupDone = hadSaved;   // people with saved data are already set up
   if (S.ui.tab === undefined) S.ui.tab = hadSaved ? 'plan' : 'setup'; // first visit on a phone starts on Setup
   function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
   function isOpen(k, def) { return S.ui[k] === undefined ? def : !!S.ui[k]; }
@@ -972,7 +1009,7 @@ const Engine = (function () {
       '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="' + id + '" value="' + val + '"' + '></div>';
   }
   function buildInputs() {
-    let h = '';
+    let h = '<p class="setupnote" id="setupNote"' + (S.ui.setupDone ? ' hidden' : '') + '>Fill in each step below. The plan stays paused until you press <b>Setup complete</b>.</p>';
     // 0. Event settings
     h += '<section class="panel"><h2><span class="stepno">0</span>Event Settings</h2>' + field('Wave goal', 'in_goal', S.goal, { min: 5, hint: 'Default 250' });
     h += '<div class="field"><label for="in_interval">Time between upgrade sets</label><select id="in_interval"><option value="auto">Auto</option>' + INTERVALS.map(v => '<option value="' + v + '">' + ivLabel(v) + '</option>').join('') + '</select></div>';
@@ -1083,7 +1120,10 @@ const Engine = (function () {
   let dirtyTimer = null, dirty = false;
   function markDirty() { dirty = true; clearTimeout(dirtyTimer); dirtyTimer = setTimeout(() => { if (dirty) $('#updateBar').classList.add('show'); }, 4000); }
   function clearDirty() { dirty = false; clearTimeout(dirtyTimer); $('#updateBar').classList.remove('show'); }
-  function schedule() { markDirty(); clearTimeout(timer); timer = setTimeout(compute, 600); }
+  // While you type, the plan waits for a short pause. Leaving the field (or pressing Enter) updates it straight away.
+  function schedule(ms) { if (!S.ui.setupDone) return; markDirty(); clearTimeout(timer); timer = setTimeout(compute, ms == null ? 900 : ms); }
+  document.addEventListener('focusout', e => { if (isInt(e.target) && dirty && S.ui.setupDone) { clearTimeout(timer); timer = setTimeout(compute, 60); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && isInt(e.target)) e.target.blur(); });
   function bindNum(id, setter, hardMax) {
     const el = $('#' + id);
     if (hardMax != null) el.max = hardMax;
@@ -1190,7 +1230,7 @@ const Engine = (function () {
   }
   $('#btnReset').addEventListener('click', () => {
     if (!window.confirm('Reset every input to its default?')) return;
-    const keep = S.ui; S = defaults(); S.ui = keep; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
+    const keep = S.ui; S = defaults(); S.ui = keep; S.ui.setupDone = false; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
   });
   // Plan / Setup tabs (phones and narrow windows only; wide screens show both)
   function setTab(t) {
@@ -1295,6 +1335,34 @@ const Engine = (function () {
   function setBusy(b) { $('#top').classList.toggle('busy', b); }
   function compute() {
     clearTimeout(timer);
+    if (!S.ui.setupDone) { showSetupMode(); return; }
+    computeNow();
+  }
+  /* ---------- first-time setup: the plan stays paused until the player says setup is complete ---------- */
+  function showSetupMode() {
+    token++; clearDirty();
+    $('#top').classList.remove('busy');
+    $('#sbMain').classList.remove('ok', 'bad');
+    $('#sbLab').textContent = 'Setup'; $('#sbBig').textContent = 'Not started'; $('#sbSub').textContent = 'Enter steps 0 to 4, then press Setup complete.';
+    $('#sbCheck .lab').textContent = 'Next upgrade set'; $('#ckBig').textContent = '-'; $('#ckSub').textContent = '';
+    $('#results').innerHTML = '<section class="panel"><h2>Your plan</h2><p>Your plan will appear here once you have pressed <b>Setup complete</b>.</p></section>';
+    PLAN = null;
+    $('#setupBar').classList.add('show');
+    const sn = $('#setupNote'); if (sn) sn.hidden = false;
+  }
+  function hideSetupMode() {
+    $('#setupBar').classList.remove('show');
+    const sn = $('#setupNote'); if (sn) sn.hidden = true;
+  }
+  function setupComplete() {
+    const a = document.activeElement; if (a && a.blur) a.blur();
+    S.ui.setupDone = true; save(); hideSetupMode();
+    if (window.matchMedia('(max-width: 900px)').matches) { setTab('plan'); window.scrollTo(0, 0); }
+    computeNow();
+  }
+  function computeNow() {
+    clearTimeout(timer);
+    hideSetupMode();
     clearDirty();
     const my = ++token;
     const n = normalized();
@@ -1312,19 +1380,35 @@ const Engine = (function () {
 
   /* ---------- plan helpers ---------- */
   function curLine(c) { return [0, 1, 2, 3].filter(i => c[i] > 0.5).map(i => TIER_NAME[i + 1] + ' ' + fmt(c[i])).join(', ') || 'nothing'; }
-  // Steps follow the real purchase order. A cap upgrade level closes the earlier steps of its tier, so a later level of an
-  // already-capped upgrade becomes its own step after the cap purchase instead of being folded into the earlier one.
-  function mergeSteps(buys) {
-    const steps = [], open = {};
+  // One step per upgrade: every purchase of the same upgrade in a set is bundled into a single "level A to B" step.
+  // Order: the planner's order of importance, except that a cap upgrade sits directly above the first upgrade that has to climb
+  // past its current maximum (already capped, or about to be), and a row's first level sits above the rows that depend on it.
+  function mergeSteps(buys, startLv) {
+    const byId = {}, order = [];
     buys.forEach(b => {
-      const u = E.BY_ID[b.id];
-      let s = open[b.id];
-      if (s && s.to === b.from) { s.to = b.to; s.cost += b.cost; }
-      else { s = { tier: b.tier, id: b.id, name: b.name, from: b.from, to: b.to, cost: b.cost, done: false }; steps.push(s); open[b.id] = s; }
-      if (u.kind === 'cap') E.BY_TIER[u.tier].forEach(v => { if (v.id !== b.id) delete open[v.id]; });
-      if (u.kind === 'capcap') [1, 2, 3, 4].forEach(t => { delete open[E.CAP_ID[t]]; });
+      const s = byId[b.id];
+      if (!s) { const ns = { tier: b.tier, id: b.id, name: b.name, from: b.from, to: b.to, cost: b.cost, done: false }; byId[b.id] = ns; order.push(ns); }
+      else { s.to = b.to; s.cost += b.cost; }
     });
-    return steps;
+    if (!startLv) return order;
+    const deps = new Map();
+    order.forEach(s => {
+      const need = new Set(), u = E.BY_ID[s.id];
+      const capId = u.kind === 'capcap' ? null : (u.kind === 'cap' ? E.CAPCAP_ID : E.CAP_ID[u.tier]);
+      if (capId && byId[capId] && s.to > E.maxLevel(u, startLv)) need.add(byId[capId]);       // climbs past the cap it starts with
+      if (u.prev && (startLv[u.prev.id] || 0) < 1 && byId[u.prev.id]) need.add(byId[u.prev.id]);   // unlocks after the row above has a level
+      deps.set(s, need);
+    });
+    const out = [], placed = new Set(), visiting = new Set();
+    const place = s => {
+      if (placed.has(s) || visiting.has(s)) return;
+      visiting.add(s);
+      deps.get(s).forEach(place);                       // whatever this step needs goes in just above it
+      visiting.delete(s);
+      if (!placed.has(s)) { out.push(s); placed.add(s); }
+    };
+    order.forEach(place);
+    return out;
   }
   function syncInputs() {
     for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el) el.value = Math.round(S.cur[t - 1]); }
@@ -1475,7 +1559,7 @@ const Engine = (function () {
     S.curAt = Date.now();
     s.done = true;
   }
-  function finishStepUpdate() { syncInputs(); save(); refreshRows(); renderStep(); }
+  function finishStepUpdate() { syncInputs(); save(); refreshRows(); renderStep(); refreshStats(); }
   function doneStep(i) { applyStep(i); finishStepUpdate(); }
   function checkinDone() {
     for (let t = 1; t <= 4; t++) S.cur[t - 1] = Math.max(0, parseInt($('#nx_c' + t).value, 10) || 0);
@@ -1490,12 +1574,12 @@ const Engine = (function () {
   }
 
   /* ---------- Upgrade Plan: always the next upgrade set and the wait before it ---------- */
-  function buildBlocks(ev) {
+  function buildBlocks(ev, startLvs) {
     const out = []; let prevT = ev[0].t;
-    ev.slice(1).forEach(e => {
+    ev.slice(1).forEach((e, k) => {
       if (e.type === 'prestige') { out.push({ type: 'prestige', e }); prevT = e.t; return; }
       out.push({ type: 'checkin', e, gap: e.t - prevT });
-      out.push({ type: 'buy', e });
+      out.push({ type: 'buy', e, start: startLvs[k + 1] });
       if (e.finish != null) out.push({ type: 'goal', e });
       prevT = e.t;
     });
@@ -1512,9 +1596,9 @@ const Engine = (function () {
       }
       return '<div class="tl chk"><div class="tlh">Let currency build</div><div class="tlw">About ' + durShort(b.gap) + ' after the set above</div><p>You should hold about ' + curLine(e.before) + '.</p></div>';
     }
-    const m = mergeSteps(e.buys);
+    const m = mergeSteps(e.buys, b.start);
     if (!m.length) return '<div class="tl buyc quiet"><div class="tlh">Upgrade set</div><p>Nothing worth buying yet. You should still clear about ' + wl(e.x) + '.</p></div>';
-    return '<div class="tl buyc"><div class="tlh">Upgrade set</div>' + m.map(s => '<div class="step">' + tag(s.tier) + ' ' + s.name + ' <span class="muted">level ' + s.from + ' to ' + s.to + ', ' + fmt(s.cost) + '</span></div>').join('') +
+    return '<div class="tl buyc"><div class="tlh">Upgrade set</div>' + m.map(s => '<div class="step">' + tag(s.tier) + ' ' + s.name + ' <span class="muted">level ' + s.from + ' to ' + s.to + ', cost: ' + fmt(s.cost) + '</span></div>').join('') +
       '<p class="expect">Then you should clear about ' + wl(e.x) + '.</p></div>';
   }
   function renderPlan() {
@@ -1526,6 +1610,36 @@ const Engine = (function () {
     else h += '<div class="timeline">' + show.map((b, i) => blockHtml(b, skip === 0 && i === 0)).join('') + '</div>';
     el.innerHTML = h;
   }
+
+  /* ---------- Stats and Breakpoints (rebuilt whenever a purchase is marked done, so it never goes stale) ---------- */
+  function statsHtml() {
+    const n = normalized();
+    const stNow = E.computeStats(n.P, n.gems, n.lv);
+    const lvAfter = Object.assign({}, n.lv);
+    if (PLAN) PLAN.steps.forEach(s => { if (!s.done) lvAfter[s.id] = s.to; });   // what is still to buy
+    const stNext = E.computeStats(n.P, n.gems, lvAfter);
+    const rNow = E.evalBuild(stNow, 1001, 0), rNext = E.evalBuild(stNext, 1001, 0);
+    const runDur = h => { const s = Math.round(h * 3600), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return hh ? hh + 'h ' + mm + 'm' : mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's'; };
+    const rowsS = [['Theoretical max wave', rNow.x, rNext.x, wl], ['Average run length', rNow.runH, rNext.runH, runDur], ['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
+      ['Move speed', stNow.ms, stNext.ms, f2], ['Event speed', stNow.ev, stNext.ev, v => f2(v) + 'x'], ['Crit chance', stNow.cc, stNext.cc, v => f2(v) + '%'],
+      ['Crit damage', stNow.cd, stNext.cd, v => f2(v) + 'x'], ['Block chance', stNow.blk, stNext.blk, v => f2(v) + '%'],
+      ['Prestige multiplier', stNow.mult, stNext.mult, v => f2(v) + 'x'], ['Enemy attack speed cut', stNow.eas, stNext.eas, v => '-' + f2(v)], ['Enemy damage cut', stNow.edmg, stNext.edmg, v => '-' + f2(v)]];
+    let h = '<h3>Your stats</h3><div class="scroll"><table><tr><th>Stat</th><th>Now</th><th>After buying</th></tr>' +
+      rowsS.map(s => '<tr><td>' + s[0] + '</td><td>' + s[3](s[1]) + '</td><td>' + s[3](s[2]) + '</td></tr>').join('') + '</table></div>';
+    const bw = E.MIL.map(m => m[0]).concat([200, 250, n.goal]).filter((w, i, a) => a.indexOf(w) === i && w <= 1000).sort((a, b) => a - b);
+    h += '<h3 style="margin-top:14px">One-hit damage needed</h3><div class="scroll"><table><tr><th>Wave</th><th>Enemy HP</th><th>Your damage</th><th>Status</th></tr>';
+    bw.forEach(w => {
+      const hp = E.EHP[w], ok = stNext.dmg >= hp;
+      h += '<tr><td>W' + w + '</td><td>' + fmt(hp) + '</td><td>' + fmt(stNext.dmg) + '</td><td class="' + (ok ? 'ok-t' : 'bad-t') + '">' + (ok ? 'one-shot' : 'short by ' + fmt(hp - stNext.dmg)) + '</td></tr>';
+    });
+    h += '</table></div><h3 style="margin-top:14px">Enemy stats</h3><div class="scroll"><table><tr><th>Wave</th><th>HP</th><th>Damage</th><th>Atk speed</th><th>Crit</th><th>Crit mult</th></tr>';
+    bw.forEach(w => {
+      const e = E.enemyAt(w, { edmg: 0, eas: 0, ecc: 0, ecd: 0 });
+      h += '<tr><td>W' + w + '</td><td>' + fmt(e.hp) + '</td><td>' + e.dmg + '</td><td>' + f2(e.as) + '</td><td>' + f2(e.cc) + '%</td><td>' + f2(e.cm) + 'x</td></tr>';
+    });
+    return h + '</table></div>';
+  }
+  function refreshStats() { const el = $('#statsBody'); if (el) el.innerHTML = statsHtml(); }
 
   /* ---------- render ---------- */
   function render(n, R) {
@@ -1549,7 +1663,13 @@ const Engine = (function () {
     }
 
     const nextEv = ev[1] && ev[1].type === 'checkin' ? ev[1] : null;
-    PLAN = { steps: mergeSteps(first.buys), target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev), n, R };
+    const startLvs = []; let runLv = Object.assign({}, n.lv);
+    ev.forEach((e, i) => {
+      if (e.type === 'prestige') { runLv = {}; E.UPG.forEach(up => { runLv[up.id] = 0; }); return; }
+      startLvs[i] = Object.assign({}, runLv);
+      e.buys.forEach(b => { runLv[b.id] = b.to; });
+    });
+    PLAN = { steps: mergeSteps(first.buys, startLvs[ev.indexOf(first)]), target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev, startLvs), n, R };
 
     // one-line summary under the time-between-sets setting
     const sets = ev.filter(e => e.type === 'checkin' && e.buys.length).length;
@@ -1562,32 +1682,7 @@ const Engine = (function () {
     html.push('<section class="panel" id="planPanel"></section>');
     let h = '';
 
-    // stats and breakpoints
-    const stNow = E.computeStats(n.P, n.gems, n.lv);
-    const lvAfter = Object.assign({}, n.lv);
-    first.buys.forEach(b => { lvAfter[b.id] = b.to; });
-    const stNext = E.computeStats(n.P, n.gems, lvAfter);
-    const rNow = E.evalBuild(stNow, 1001, 0), rNext = E.evalBuild(stNext, 1001, 0);
-    const runDur = h => { const s = Math.round(h * 3600), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return hh ? hh + 'h ' + mm + 'm' : mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's'; };
-    const rowsS = [['Theoretical max wave', rNow.x, rNext.x, wl], ['Average run length', rNow.runH, rNext.runH, runDur], ['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
-      ['Move speed', stNow.ms, stNext.ms, f2], ['Event speed', stNow.ev, stNext.ev, v => f2(v) + 'x'], ['Crit chance', stNow.cc, stNext.cc, v => f2(v) + '%'],
-      ['Crit damage', stNow.cd, stNext.cd, v => f2(v) + 'x'], ['Block chance', stNow.blk, stNext.blk, v => f2(v) + '%'],
-      ['Prestige multiplier', stNow.mult, stNext.mult, v => f2(v) + 'x'], ['Enemy attack speed cut', stNow.eas, stNext.eas, v => '-' + f2(v)], ['Enemy damage cut', stNow.edmg, stNext.edmg, v => '-' + f2(v)]];
-    h = '<h3>Your stats</h3><div class="scroll"><table><tr><th>Stat</th><th>Now</th><th>After buying</th></tr>' +
-      rowsS.map(s => '<tr><td>' + s[0] + '</td><td>' + s[3](s[1]) + '</td><td>' + s[3](s[2]) + '</td></tr>').join('') + '</table></div>';
-    const bw = E.MIL.map(m => m[0]).concat([200, 250, n.goal]).filter((w, i, a) => a.indexOf(w) === i && w <= 1000).sort((a, b) => a - b);
-    h += '<h3 style="margin-top:14px">One-hit damage needed</h3><div class="scroll"><table><tr><th>Wave</th><th>Enemy HP</th><th>Your damage</th><th>Status</th></tr>';
-    bw.forEach(w => {
-      const hp = E.EHP[w], ok = stNext.dmg >= hp;
-      h += '<tr><td>W' + w + '</td><td>' + fmt(hp) + '</td><td>' + fmt(stNext.dmg) + '</td><td class="' + (ok ? 'ok-t' : 'bad-t') + '">' + (ok ? 'one-shot' : 'short by ' + fmt(hp - stNext.dmg)) + '</td></tr>';
-    });
-    h += '</table></div><h3 style="margin-top:14px">Enemy stats</h3><div class="scroll"><table><tr><th>Wave</th><th>HP</th><th>Damage</th><th>Atk speed</th><th>Crit</th><th>Crit mult</th></tr>';
-    bw.forEach(w => {
-      const e = E.enemyAt(w, { edmg: 0, eas: 0, ecc: 0, ecd: 0 });
-      h += '<tr><td>W' + w + '</td><td>' + fmt(e.hp) + '</td><td>' + e.dmg + '</td><td>' + f2(e.as) + '</td><td>' + f2(e.cc) + '%</td><td>' + f2(e.cm) + 'x</td></tr>';
-    });
-    h += '</table></div>';
-    html.push(det('stats', 'Stats and Breakpoints', h, false));
+    html.push(det('stats', 'Stats and Breakpoints', '<div id="statsBody">' + statsHtml() + '</div>', false));
 
     html.push(det('how', 'How it works',
       '<h3>Set up once</h3><ol class="plain">' +
@@ -1596,6 +1691,7 @@ const Engine = (function () {
       '<li><b>Event Currency:</b> enter the currency you hold right now.</li>' +
       '<li><b>Gems:</b> tick Use gems if you own gem upgrades, then enter your levels. The Rec. column shows the cheapest levels that still reach your goal in time.</li>' +
       '<li><b>Upgrades:</b> enter the level of every upgrade you own. Locked rows open with your prestige tier or once the row above has a level.</li>' +
+      '<li>Press <b>Setup complete</b>. Nothing updates until you do.</li>' +
       '</ol><h3 style="margin-top:12px">Then, every round</h3><ol class="plain">' +
       '<li>Under <b>Buy now</b>, buy each upgrade in the game and press Done.</li>' +
       '<li>Let the game run until the time shown, so your event currency builds up.</li>' +
@@ -1699,6 +1795,96 @@ const Engine = (function () {
     step();
   }
 
+
+  /* ---------- change log ----------
+     Plain-language notes for players, newest first, one block per day (Pacific Time). Add each new change to the block for the day it
+     is made, or start a new block on a new day. When you add to an existing block, bump the number at the end of its id so the
+     "new" dot shows again. The page lists each block's items as fixes, then changes, then new features.
+     Item kinds: 'new' (something you can now do), 'changed' (something works differently or better), 'fix' (a problem that is now solved).
+     Note: blocks dated Sep 26 and earlier carry illustrative dates spread over a month. Real dates start with the Oct 3 block. */
+  const CHANGELOG = [
+    { id: '2026-10-03-1', date: '2026-10-03', title: 'Latest updates', items: [
+      ['fix', 'The Stats section now updates right away when you mark a purchase as done.'],
+      ['changed', 'If a set has several levels of the same upgrade, you now see one line (for example "level 14 to 18") with the cost labelled.'],
+      ['changed', 'In an upgrade set, a cap upgrade sits directly above the first upgrade that needs it. Every other upgrade stays in the planner\'s order of importance.'],
+      ['changed', 'After setup, the plan updates when you leave a field or pause typing, so entering numbers feels smoother.'],
+      ['changed', 'The "Setup code" button is now called "Import/Export", and its window has separate Export and Import sections.'],
+      ['changed', 'Change log entries are grouped by day, and each day lists fixes first, then changes, then new features.'],
+      ['new', 'First-time setup mode. Fill in every step without the plan recalculating, then press Setup complete.'],
+      ['new', 'This change log. Open it from the top of the page to see what changed and when.'] ] },
+    { id: '2026-09-26-a', date: '2026-09-26', title: 'Waiting for currency', items: [
+      ['changed', '"Check-in" is now "Next upgrade set". It reminds you to let the game run so currency builds up.'],
+      ['changed', 'The currency boxes fill in with an estimate, and a number you type stays as you typed it.'],
+      ['changed', 'The Update plan button only appears if a change has not gone through after a few seconds.'] ] },
+    { id: '2026-09-25-a', date: '2026-09-25', title: 'Whole numbers only', items: [
+      ['changed', 'Number boxes only take whole numbers. A small "Numbers only" note appears if you try a comma or a period.'],
+      ['new', 'Your prestige tier no longer has a maximum.'] ] },
+    { id: '2026-09-24-a', date: '2026-09-24', title: 'Stats and guide', items: [
+      ['new', 'Stats now shows your expected max wave and average run length.'],
+      ['changed', 'How it works is shorter and covers just what you need to do.'],
+      ['changed', 'The Prestige Path section was removed.'] ] },
+    { id: '2026-09-23-a', date: '2026-09-23', title: 'Move your setup between devices', items: [
+      ['new', 'Import/Export. Copy a short code and paste it on another device to bring your setup across.'] ] },
+    { id: '2026-09-22-a', date: '2026-09-22', title: 'Light and dark mode', items: [
+      ['new', 'A light and dark mode button at the top of the page.'] ] },
+    { id: '2026-09-21-a', date: '2026-09-21', title: 'Safer editing of upgrade caps', items: [
+      ['fix', 'Clearing a cap upgrade box to type a new number no longer cuts down your other upgrades.'],
+      ['changed', 'If a lower number would change other things, you are asked first and told exactly what would change. Your prestige tier and the upgrades that unlock others are protected the same way.'] ] },
+    { id: '2026-09-19-a', date: '2026-09-19', title: 'Pick any wave goal', items: [
+      ['new', 'Set any wave goal, with a one-line summary of the expected max wave and number of upgrade sets.'] ] },
+    { id: '2026-09-18-a', date: '2026-09-18', title: 'Simpler, cleaner layout', items: [
+      ['changed', 'Event time left now sits at the very top.'],
+      ['changed', 'Setup follows the order you fill things in: event settings, prestige, currency, gems, then upgrades.'],
+      ['changed', 'The time for your next upgrade set updates as you enter your currency, based on when you will have enough.'],
+      ['changed', 'The Upgrade Plan always shows your next upgrade set and the wait before it. Repeated explanations were trimmed.'] ] },
+    { id: '2026-09-16-a', date: '2026-09-16', title: 'Works well on phones', items: [
+      ['new', 'Plan and Setup tabs on phones, with larger buttons and number boxes that are easy to tap.'],
+      ['changed', 'Locked upgrades now say why they are locked, either the prestige tier or the upgrade above them.'],
+      ['fix', 'The page no longer jumps around while the plan updates.'] ] },
+    { id: '2026-09-14-a', date: '2026-09-14', title: 'Gem recommendations', items: [
+      ['new', 'A gem table showing the recommended, owned and maximum level of each gem.'],
+      ['changed', 'Recommended gems are the cheapest set that still reaches your goal in time, and they change as the event time runs down.'],
+      ['changed', 'If your goal cannot be reached, the page shows how far you could get with maxed gems.'] ] },
+    { id: '2026-09-12-a', date: '2026-09-12', title: 'Number limits', items: [
+      ['changed', 'No box accepts more than the maximum for that upgrade or gem.'] ] },
+    { id: '2026-09-10-a', date: '2026-09-10', title: 'Rule fixes', items: [
+      ['fix', 'Prestige Bonus is now counted correctly, confirmed using real stats.'],
+      ['fix', 'Upgrades that only unlock after the one above them are planned correctly.'],
+      ['changed', 'Waves are shown the way the game counts them, for example "W27-2".'] ] },
+    { id: '2026-09-08-a', date: '2026-09-08', title: 'More accurate predictions', items: [
+      ['changed', 'Predictions were checked against real runs, so waves cleared and run times now match what you see in the game much more closely.'] ] },
+    { id: '2026-09-06-a', date: '2026-09-06', title: 'Smarter planning', items: [
+      ['new', 'Upgrade sets follow your rules, such as buying attack only until enemies fall in one hit.'],
+      ['new', 'The time between upgrade sets adjusts itself.'],
+      ['new', 'The planner works out the fastest route through your prestiges.'] ] },
+    { id: '2026-09-04-a', date: '2026-09-04', title: 'First release', items: [
+      ['new', 'Plan what to buy with the currency you hold, with a Done button for each purchase.'],
+      ['new', 'The time left in the event is read from your device clock.'],
+      ['new', 'A recommended time for your next upgrade set and for when to prestige.'],
+      ['new', 'Your setup is saved in your browser automatically.'] ] }
+  ];
+  function renderLog() {
+    const kind = { new: ['new', 'New'], changed: ['changed', 'Changed'], fix: ['fix', 'Fixed'] };
+    $('#logBody').innerHTML = CHANGELOG.map(e => {
+      const d = new Date(e.date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const rank = { fix: 0, changed: 1, new: 2 };                       // most important first: fixes, then changes, then new features
+      const items = e.items.slice().sort((x, y) => rank[x[0]] - rank[y[0]]);
+      return '<div class="log-entry"><div class="log-date">' + d + '</div><div class="log-title">' + e.title + '</div><ul class="log">' +
+        items.map(it => '<li><span class="lchip ' + kind[it[0]][0] + '">' + kind[it[0]][1] + '</span><span>' + it[1] + '</span></li>').join('') + '</ul></div>';
+    }).join('');
+  }
+  function updateLogDot() { const d = $('#logDot'); if (d) d.hidden = S.ui.logSeen === CHANGELOG[0].id; }
+  if (S.ui.logSeen === undefined && !hadSaved) S.ui.logSeen = CHANGELOG[0].id;   // brand-new visitors have nothing to catch up on
+  $('#btnLog').addEventListener('click', () => {
+    renderLog();
+    S.ui.logSeen = CHANGELOG[0].id; save(); updateLogDot();
+    $('#logDlg').showModal();
+    $('#logBody').scrollTop = 0;
+  });
+  $('#logClose').addEventListener('click', () => $('#logDlg').close());
+  $('#logDlg').addEventListener('click', e => { if (e.target === $('#logDlg')) $('#logDlg').close(); });
+  updateLogDot();
+
   /* ---------- whole numbers only ---------- */
   let tipEl = null, tipTimer = null;
   function numTip(el) {
@@ -1745,7 +1931,7 @@ const Engine = (function () {
   if (window.matchMedia) { try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!S.ui.theme) applyTheme(); }); } catch (e) { /* older browsers */ } }
   applyTheme();
 
-  /* ---------- setup code: a short string that carries the whole setup to another device ---------- */
+  /* ---------- import/export code: a short string that carries the whole setup to another device ---------- */
   const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   function putVar(arr, n) { n = Math.max(0, Math.floor(n)); while (n >= 128) { arr.push((n % 128) | 128); n = Math.floor(n / 128); } arr.push(n); }
   function getVar(bytes, pos) {
@@ -1821,7 +2007,7 @@ const Engine = (function () {
     S.interval = o.iv >= 1 && o.iv <= INTERVALS.length ? String(INTERVALS[o.iv - 1]) : 'auto';
     S.useGems = o.useGems; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
     S.cur = o.cur.slice(); S.lv = {}; E.UPG.forEach((up, i) => { S.lv[up.id] = o.lv[i]; });
-    S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null];
+    S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null]; S.ui.setupDone = true;
     save(); lastGemInfo = null; buildInputs(); compute();
   }
   const dlg = $('#codeDlg');
@@ -1844,6 +2030,8 @@ const Engine = (function () {
     if (!window.confirm('Replace your current setup with this code?')) return;
     applyCode(o); dlg.close();
   });
+
+  $('#btnSetup').addEventListener('click', setupComplete);
 
   /* ---------- manual update fallback ---------- */
   $('#btnUpdate').addEventListener('click', () => {
