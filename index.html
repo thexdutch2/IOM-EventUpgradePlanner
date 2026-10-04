@@ -133,6 +133,7 @@ label.chk { display: flex; align-items: center; gap: 10px; padding: 6px 0; curso
 .grow .rc { font-size: 13px; font-weight: 600; text-align: right; color: var(--accent); }
 .grow .rc.need { color: var(--warn); }
 .grow input[type=checkbox] { justify-self: end; }
+.urow.blankwarn { background: var(--warn-bg); outline: 2px solid var(--warn); outline-offset: 0; border-radius: 6px; margin-right: -8px; padding-right: 8px; margin-bottom: 7px; }   /* the highlight reaches 8px past the columns, so the Next text keeps a margin */
 .urow.locked { opacity: .62; }
 .urow.locked .nm { color: var(--muted); }
 
@@ -328,6 +329,7 @@ ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; fon
 </div>
 <dialog id="logDlg" class="flyout" aria-labelledby="logTitle">
   <div class="fly-head"><h2 id="logTitle">Change log</h2><button type="button" class="hbtn" id="logClose" aria-label="Close change log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <p class="note fly-note">What changed and when, newest first. Dates are Pacific Time. Each day lists fixes first, then changes, then new features.</p>
   <div id="logBody"></div>
 </dialog>
 <dialog id="codeDlg" aria-labelledby="cdTitle">
@@ -975,11 +977,12 @@ const Engine = (function () {
 
   /* ---------- state -> engine inputs ---------- */
   // Level rules: locked by prestige tier, locked until the row above has a level, and capped by the tier's cap upgrades.
-  function clampLevels(P, rawLv) {
+  function clampLevels(P, rawLv, strict) {
+    if (strict === undefined) strict = !!S.ui.setupDone;   // during first-time setup a blank row above never trims a row below it
     const lv = {}, raw = {};
     for (let t = 1; t <= 4; t++) E.BY_TIER[t].forEach(u => {
       let L = Math.max(0, Math.round(num(rawLv[u.id], 0)));
-      if (P < u.unlock || (u.prev && raw[u.prev.id] < 1)) L = 0;
+      if (P < u.unlock || (strict && u.prev && raw[u.prev.id] < 1)) L = 0;
       raw[u.id] = L;
     });
     const order = E.UPG.slice().sort((a, b) => (a.kind === 'capcap' ? 0 : a.kind === 'cap' ? 1 : 2) - (b.kind === 'capcap' ? 0 : b.kind === 'cap' ? 1 : 2));
@@ -1038,7 +1041,7 @@ const Engine = (function () {
     h += '<p class="limits" id="gemLimits"></p><p class="note" id="gemSummary"></p></div></details></section>';
     // 4. Upgrades
     h += '<section class="panel"><details data-k="upgrades"' + (isOpen('upgrades', true) ? ' open' : '') + '><summary><span class="stepno">4</span><span>Upgrades</span><span class="sumcount" id="upSum"></span></summary>';
-    h += '<p class="note">Locked rows open with your prestige tier or the row above.</p>';
+    h += '<p class="note" id="upNote"></p>';
     h += '<div class="colhead"><span>Upgrade</span><span>Level</span><span>Max</span><span>Next</span></div>';
     for (let t = 1; t <= 4; t++) {
       h += '<div class="tierhead plain t' + t + '"><b>Tier ' + t + '</b><span class="tc" id="tc_' + t + '"></span></div>';
@@ -1058,17 +1061,22 @@ const Engine = (function () {
   }
   function refreshRows() {
     const n = normalized();
+    const blankSet = new Set(showBlankHints && !S.ui.setupDone ? blankRowsAbove().map(w => w.id) : []);
     E.UPG.forEach(u => {
       const row = $('#row_' + u.id), inp = $('#lv_' + u.id);
       if (!row || !inp) return;
       const mx = E.maxLevel(u, n.lv), L = n.lv[u.id];
       const prestigeLocked = n.P < u.unlock;
-      const chainLocked = !prestigeLocked && u.prev && n.lv[u.prev.id] < 1;
+      const chainLocked = S.ui.setupDone && !prestigeLocked && u.prev && n.lv[u.prev.id] < 1;   // during first-time setup the rows above are filled in for you
       const locked = prestigeLocked || chainLocked;
       row.classList.toggle('locked', locked);
       inp.disabled = locked; inp.max = mx;
       // never let a level sit above what is possible (cap upgrades, prestige tier, unlock chain)
-      if (num(inp.value, 0) > L || (locked && inp.value !== '0')) { inp.value = L; S.lv[u.id] = L; }
+      if (num(inp.value, 0) > L || (locked && inp.value !== '0')) {
+        const typedHigher = num(inp.value, 0) > L;
+        inp.value = L; S.lv[u.id] = L;
+        if (typedHigher && document.activeElement === inp && !locked) numTip(inp, 'Highest allowed is ' + L);
+      }
       row.querySelector('.mx').textContent = locked ? '' : mx;
       const cs = row.querySelector('.cs');
       if (prestigeLocked) { cs.innerHTML = '<span class="pill">' + LOCK + 'P' + u.unlock + '</span>'; delete cs.dataset.k; }
@@ -1077,6 +1085,7 @@ const Engine = (function () {
       else { cs.textContent = fmt(E.nextCost(u, L)); cs.dataset.k = 'cost'; }
       row.title = prestigeLocked ? 'Unlocks at prestige tier ' + u.unlock + '.' : (chainLocked ? 'Buy at least 1 level of the upgrade above this one first.' : '');
       row.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      row.classList.toggle('blankwarn', showBlankHints && !S.ui.setupDone && blankSet.has(u.id));
     });
     // how much of each tier is open at this prestige tier
     let openAll = 0;
@@ -1085,6 +1094,8 @@ const Engine = (function () {
       openAll += o;
       const el = $('#tc_' + t); if (el) el.textContent = o + ' of ' + list.length + ' open';
     }
+    const un = $('#upNote');
+    if (un) un.textContent = S.ui.setupDone ? 'Locked rows open with your prestige tier or the row above.' : 'Enter what you own. A level above a row\'s normal maximum raises the tier cap upgrades and Cap of Cap Upgrades for you. Rows above your lowest filled upgrade should not be blank, and you will be asked to check them.';
     const us = $('#upSum'); if (us) us.textContent = openAll + ' of ' + E.UPG.length + ' open';
     const pi = $('#presInfo');
     if (pi) {
@@ -1165,12 +1176,41 @@ const Engine = (function () {
   function lossList(aff) {
     return aff.slice(0, 4).map(a => a.name + ' ' + a.before + ' to ' + a.after).join('; ') + (aff.length > 4 ? '; and ' + (aff.length - 4) + ' more' : '');
   }
+  // First-time setup only: someone partway through the event can already own levels above a row's normal maximum.
+  // Raise the tier cap upgrade (and Cap of Cap Upgrades) just enough to allow what was entered. Rows above are left blank for the player.
+  function autoRaise() {
+    const P = clamp(Math.round(num(S.P, 0)), 0, 100000);
+    const R = {}; E.UPG.forEach(w => { R[w.id] = Math.max(0, Math.round(num(S.lv[w.id], 0))); });
+    const cc = E.BY_ID[E.CAPCAP_ID], maxCap = P >= cc.unlock ? 20 : 10;
+    let needCC = R[cc.id];
+    for (let t = 1; t <= 4; t++) {
+      const capU = E.BY_ID[E.CAP_ID[t]];
+      let need = R[capU.id];
+      E.BY_TIER[t].forEach(w => { if (!w.kind && P >= w.unlock) need = Math.max(need, R[w.id] - w.max); });
+      if (need > R[capU.id] && P >= capU.unlock) R[capU.id] = Math.min(need, maxCap);
+      if (R[capU.id] > 10 && P >= cc.unlock) needCC = Math.max(needCC, R[capU.id] - 10);
+    }
+    if (needCC > R[cc.id] && P >= cc.unlock) R[cc.id] = Math.min(needCC, 10);
+    E.UPG.forEach(w => { S.lv[w.id] = R[w.id]; });
+  }
+  // Rows above the lowest filled row of a tier should not be blank (the game needs a level in each). Used to warn at Setup complete.
+  let showBlankHints = false;
+  function blankRowsAbove() {
+    const P = clamp(Math.round(num(S.P, 0)), 0, 100000), out = [];
+    for (let t = 1; t <= 4; t++) {
+      const rows = E.BY_TIER[t];
+      let low = -1;
+      rows.forEach((w, i) => { if (P >= w.unlock && Math.round(num(S.lv[w.id], 0)) > 0) low = i; });
+      rows.forEach((w, i) => { if (i < low && P >= w.unlock && Math.round(num(S.lv[w.id], 0)) < 1) out.push(w); });
+    }
+    return out;
+  }
   function guardUpgrade(u) {
     const el = $('#lv_' + u.id); if (!el) return;
     const isCap = u.kind === 'cap' || u.kind === 'capcap';
     guardedField(el, {
       before: () => normalized().lv[u.id],
-      commit: v => { S.lv[u.id] = v; },
+      commit: v => { S.lv[u.id] = v; if (!S.ui.setupDone && v > 0) { autoRaise(); syncInputs(document.activeElement); } },
       always: isCap,
       affected: v => {
         const P = normalized().P, b = clampLevels(P, S.lv), a = clampLevels(P, Object.assign({}, S.lv, { [u.id]: v }));
@@ -1345,7 +1385,7 @@ const Engine = (function () {
     $('#sbMain').classList.remove('ok', 'bad');
     $('#sbLab').textContent = 'Setup'; $('#sbBig').textContent = 'Not started'; $('#sbSub').textContent = 'Enter steps 0 to 4, then press Setup complete.';
     $('#sbCheck .lab').textContent = 'Next upgrade set'; $('#ckBig').textContent = '-'; $('#ckSub').textContent = '';
-    $('#results').innerHTML = '<section class="panel"><h2>Your plan</h2><p>Your plan will appear here once you have pressed <b>Setup complete</b>.</p></section>';
+    $('#results').innerHTML = '<section class="panel"><h2>Your plan</h2><p>Your plan appears here once your setup is complete. Nothing updates while you enter your values, so take your time.</p></section>';
     PLAN = null;
     $('#setupBar').classList.add('show');
     const sn = $('#setupNote'); if (sn) sn.hidden = false;
@@ -1356,7 +1396,23 @@ const Engine = (function () {
   }
   function setupComplete() {
     const a = document.activeElement; if (a && a.blur) a.blur();
-    S.ui.setupDone = true; save(); hideSetupMode();
+    const blanks = blankRowsAbove();
+    if (blanks.length) {
+      showBlankHints = true; refreshRows();
+      const byTier = {}; blanks.forEach(w => { (byTier[w.tier] = byTier[w.tier] || []).push(w.name); });
+      const lines = Object.keys(byTier).map(t => { const n = byTier[t]; return 'Tier ' + t + ': ' + n.slice(0, 4).join('; ') + (n.length > 4 ? ' and ' + (n.length - 4) + ' more' : ''); }).join('\n');
+      const msg = 'Some upgrades look skipped:\n\n' + lines +
+        '\n\nIn the game you need a level in each upgrade above one you own, so these may be mistakes.\n\nOK: continue and count them as level 1.\nCancel: go back and fill them in. They will be highlighted.';
+      if (!window.confirm(msg)) {
+        setTab('setup');
+        const el = $('#lv_' + blanks[0].id); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+        return;
+      }
+      blanks.forEach(w => { S.lv[w.id] = 1; });
+      syncInputs();
+    }
+    showBlankHints = false;
+    S.ui.setupDone = true; save(); hideSetupMode(); refreshRows();
     if (window.matchMedia('(max-width: 900px)').matches) { setTab('plan'); window.scrollTo(0, 0); }
     computeNow();
   }
@@ -1381,7 +1437,8 @@ const Engine = (function () {
   /* ---------- plan helpers ---------- */
   function curLine(c) { return [0, 1, 2, 3].filter(i => c[i] > 0.5).map(i => TIER_NAME[i + 1] + ' ' + fmt(c[i])).join(', ') || 'nothing'; }
   // One step per upgrade: every purchase of the same upgrade in a set is bundled into a single "level A to B" step.
-  // Order: the planner's order of importance, except that a cap upgrade sits directly above the first upgrade that has to climb
+  // Order: the planner's order of importance, except that Cap of Cap Upgrades goes to the top when a cap upgrade in the set needs it,
+  // a cap upgrade sits directly above the first upgrade that has to climb
   // past its current maximum (already capped, or about to be), and a row's first level sits above the rows that depend on it.
   function mergeSteps(buys, startLv) {
     const byId = {}, order = [];
@@ -1407,12 +1464,14 @@ const Engine = (function () {
       visiting.delete(s);
       if (!placed.has(s)) { out.push(s); placed.add(s); }
     };
+    const cc = byId[E.CAPCAP_ID];
+    if (cc && order.some(s => { const u2 = E.BY_ID[s.id]; return u2.kind === 'cap' && s.to > E.maxLevel(u2, startLv); })) place(cc);   // top of the set
     order.forEach(place);
     return out;
   }
-  function syncInputs() {
-    for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el) el.value = Math.round(S.cur[t - 1]); }
-    E.UPG.forEach(u => { const el = $('#lv_' + u.id); if (el) el.value = S.lv[u.id] || 0; });
+  function syncInputs(skip) {
+    for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el && el !== skip) el.value = Math.round(S.cur[t - 1]); }
+    E.UPG.forEach(u => { const el = $('#lv_' + u.id); if (el && el !== skip) el.value = S.lv[u.id] || 0; });
   }
   function shortClock(ms) {
     const d = new Date(ms), t = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -1803,7 +1862,12 @@ const Engine = (function () {
      Item kinds: 'new' (something you can now do), 'changed' (something works differently or better), 'fix' (a problem that is now solved).
      Note: blocks dated Sep 26 and earlier carry illustrative dates spread over a month. Real dates start with the Oct 3 block. */
   const CHANGELOG = [
-    { id: '2026-10-03-1', date: '2026-10-03', title: 'Latest updates', items: [
+    { id: '2026-10-04-2', date: '2026-10-04', title: 'Latest updates', items: [
+      ['fix', 'Highlighted blank rows in setup no longer run over the "next" cost text, and the Setup complete warning is shorter and easier to read.'],
+      ['changed', 'First-time setup lets you enter any upgrade level you own. If a level is above a row\'s normal maximum, the tier cap upgrade and Cap of Cap Upgrades are raised for you.'],
+      ['changed', 'Rows above are left blank for you to fill in. When you press Setup complete, you are warned about blank rows above the lowest upgrade you filled in each tier, they are highlighted, and you can go back or continue with them counted as level 1.'] ] },
+    { id: '2026-10-03-3', date: '2026-10-03', title: 'Latest updates', items: [
+      ['changed', 'When an upgrade set includes Cap of Cap Upgrades that other cap upgrades depend on, it is now listed at the very top of the set.'],
       ['fix', 'The Stats section now updates right away when you mark a purchase as done.'],
       ['changed', 'If a set has several levels of the same upgrade, you now see one line (for example "level 14 to 18") with the cost labelled.'],
       ['changed', 'In an upgrade set, a cap upgrade sits directly above the first upgrade that needs it. Every other upgrade stays in the planner\'s order of importance.'],
@@ -1887,9 +1951,9 @@ const Engine = (function () {
 
   /* ---------- whole numbers only ---------- */
   let tipEl = null, tipTimer = null;
-  function numTip(el) {
+  function numTip(el, msg) {
     if (!tipEl) { tipEl = document.createElement('div'); tipEl.id = 'numTip'; tipEl.setAttribute('role', 'status'); document.body.appendChild(tipEl); }
-    tipEl.textContent = 'Numbers only';
+    tipEl.textContent = msg || 'Numbers only';
     const r = el.getBoundingClientRect();
     tipEl.style.left = Math.max(8, Math.min(window.innerWidth - 130, r.left + window.scrollX)) + 'px';
     tipEl.style.top = (r.bottom + window.scrollY + 6) + 'px';
@@ -2007,6 +2071,7 @@ const Engine = (function () {
     S.interval = o.iv >= 1 && o.iv <= INTERVALS.length ? String(INTERVALS[o.iv - 1]) : 'auto';
     S.useGems = o.useGems; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
     S.cur = o.cur.slice(); S.lv = {}; E.UPG.forEach((up, i) => { S.lv[up.id] = o.lv[i]; });
+    blankRowsAbove().forEach(w => { S.lv[w.id] = 1; });
     S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null]; S.ui.setupDone = true;
     save(); lastGemInfo = null; buildInputs(); compute();
   }
