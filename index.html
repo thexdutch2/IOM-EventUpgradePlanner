@@ -188,6 +188,10 @@ tr.isrec td { font-weight: 600; background: var(--surface2); }
 
 .setupnote { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 0 0 12px; }
 .buy .cost::before { content: "cost: "; font-weight: 400; color: var(--muted); }
+.hrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.hrow h2 { margin: 0; }
+.ordsel { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.ordsel select { width: auto; }
 /* ---------- header buttons, setup-code dialog, number tip, update bar ---------- */
 .hbtns { display: flex; gap: 8px; align-items: center; }
 .hbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 38px; padding: 6px 12px; }
@@ -295,7 +299,7 @@ ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; fon
   <header class="top-head">
     <div>
       <h1>Event upgrade planner</h1>
-      <p class="sub">Enter your prestige, currency and upgrades. The planner works out what to buy and when to buy it.</p>
+      <p class="sub">Enter your prestige tier, event currency and upgrades. The planner recommends what to buy and when.</p>
     </div>
     <div class="hbtns">
       <button id="btnLog" class="hbtn" type="button" aria-label="Change log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span class="hlabel">Change log</span><span class="newdot" id="logDot" hidden></span></button>
@@ -311,7 +315,7 @@ ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; fon
   </section>
 
   <section class="statusbar" id="top" aria-live="polite">
-    <div class="sb" id="sbMain"><span class="busytag">Updating</span><div class="lab" id="sbLab">Goal projection</div><div class="bigline" id="sbBig">Calculating</div><div class="subline" id="sbSub">Starting</div></div>
+    <div class="sb" id="sbMain"><span class="busytag">Updating</span><div class="lab" id="sbLab">Goal projection</div><div class="bigline" id="sbBig">Calculating</div><div class="subline" id="sbSub">Preparing your plan</div></div>
     <div class="sb" id="sbCheck"><div class="lab">Next upgrade set</div><div class="bigline" id="ckBig">...</div><div class="subline" id="ckSub"></div></div>
   </section>
 
@@ -329,17 +333,17 @@ ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; fon
 </div>
 <dialog id="logDlg" class="flyout" aria-labelledby="logTitle">
   <div class="fly-head"><h2 id="logTitle">Change log</h2><button type="button" class="hbtn" id="logClose" aria-label="Close change log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-  <p class="note fly-note">What changed and when, newest first. Dates are Pacific Time. Each day lists fixes first, then changes, then new features.</p>
+  <p class="note fly-note">Release history, newest first. Dates are in Pacific Time. Each entry lists fixes first, then changes, then new features.</p>
   <div id="logBody"></div>
 </dialog>
 <dialog id="codeDlg" aria-labelledby="cdTitle">
   <h2 id="cdTitle">Import/Export</h2>
   <h3 style="margin-top:8px">Export</h3>
-  <p class="note">Copy this code to bring your setup to another device.</p>
+  <p class="note">Copy this code to transfer your setup to another device.</p>
   <textarea id="cdOut" readonly rows="2" aria-label="Your export code"></textarea>
   <div class="row2"><button class="primary" type="button" id="cdCopy">Copy code</button><span class="note" id="cdCopied" role="status"></span></div>
   <h3>Import</h3>
-  <p class="note">Paste a code from another device. It replaces your current setup.</p>
+  <p class="note">Paste a code from another device. Importing replaces your current setup.</p>
   <textarea id="cdIn" rows="2" placeholder="Paste a code here" aria-label="Code to import" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
   <div class="row2"><button type="button" id="cdImport">Import</button><span class="note" id="cdMsg" role="status"></span></div>
   <div class="row2" style="justify-content:flex-end;margin-top:14px"><button type="button" id="cdClose">Close</button></div>
@@ -752,7 +756,7 @@ const Engine = (function () {
 
   /* ---------- Campaign simulation ---------- */
   // o: { P, gems, lv, cur, remainH, goal, intervalH, lambda }
-  function simulate(o) {
+  function* simulateGen(o) {   // yields every few visits so a page can stay responsive; simulate() below runs it to the end
     let P = o.P;
     const gems = o.gems, goal = o.goal, remainH = o.remainH, lambda = o.lambda;
     const adaptG = o.adaptG || 0;               // adaptive check-ins: target J gain per check-in
@@ -770,6 +774,7 @@ const Engine = (function () {
     const events = [];
     let guard = 0;
     while (guard++ < 20000) {
+      if ((guard & 7) === 0) yield;
       const target = pi < path.length ? path[pi][0] : goal;
       const before = cur.slice();
       const Jb = adaptG ? evalBuild(computeStats(P, gems, lv), target, lambda).J : 0;
@@ -841,6 +846,25 @@ const Engine = (function () {
             dt = snapGap(Math.min(adaptG / Math.max(gain / Math.max(gap, 0.05), 1e-9), capGap));
           }
         }
+        // Minimum progress: do not recommend a visit unless the next set lifts the theoretical max wave by at least o.minProgress
+        if ((o.minProgress || o.minWaves) && !prof.capable && events.filter(e => e.type === 'checkin').length <= (o.minProgressSets || Infinity)) {
+          const xNow = evalBuild(st, 1001, 0).x;
+          const need = Math.min(Math.max(xNow * (1 + (o.minProgress || 0)), xNow + (o.minWaves || 0)), target);
+          const LIST = []; for (let g = 0.25; g < 48; g *= 1.25) LIST.push(Math.round(g * 1000) / 1000); LIST.push(48);   // fine ladder, so a visit is never pushed far past the point where the minimum is met
+          const reach = (g) => {
+            const lv2 = Object.assign({}, lv), cur2 = cur.map((c, k) => c + inc[k] / prof.runH * g);
+            spendAll({ P, gems, lv: lv2, cur: cur2, target, lambda, waiting: [0, 0, 0, 0, 0], rules: o.rules });
+            return evalBuild(computeStats(P, gems, lv2), 1001, 0).x >= need - 1e-9;
+          };
+          let i0 = LIST.findIndex(g => g >= dt - 1e-9);
+          if (i0 < 0) i0 = LIST.length - 1;
+          if (reach(LIST[i0])) dt = LIST[i0];
+          else if (reach(LIST[LIST.length - 1])) {
+            let lo = i0 + 1, hi = LIST.length - 1;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (reach(LIST[mid])) hi = mid; else lo = mid + 1; }
+            dt = LIST[lo];
+          }
+        }
         justPrestiged = false;
       }
       lastCheckT = t;
@@ -858,10 +882,11 @@ const Engine = (function () {
     }
     return { attainable: completion != null, completionH: completion, maxWave: completion != null ? goal : maxWave, events, finalP: P };
   }
+  function simulate(o) { const g = simulateGen(o); let r = g.next(); while (!r.done) r = g.next(); return r.value; }
 
   return {
     UPG, BY_ID, BY_TIER, CAP_ID, CAPCAP_ID, COST, MIL, EHP, GEM_SETS,
-    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, incomePerRun, tierAtWave, pathFor, simulate
+    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, incomePerRun, tierAtWave, pathFor, simulate, simulateGen
   };
 })();
 
@@ -883,12 +908,21 @@ const Engine = (function () {
     { name: 'P31 at W160, P43 at W220', path: [[10, 1], [15, 2], [20, 3], [30, 5], [55, 10], [105, 20], [160, 31], [220, 43]] }
   ];
   const LAMBDAS = [10, 30];
+  // Minimum progress per visit (Auto timing only). A visit is only recommended once the next set lifts the theoretical max wave by at least this much.
+  const MINPROG = [
+    { key: 'auto', label: 'Auto (at least 1 wave)', waves: 1, pct: 0, note: 'Recommends a visit once the next upgrade set raises your theoretical max wave by at least one wave.' },
+    { key: 'any', label: 'Any gain', waves: 0, pct: 0, note: 'Recommends a visit as soon as any useful purchase is affordable. This produces the most visits, including very short ones.' },
+    { key: 'w2', label: 'At least 2 waves', waves: 2, pct: 0, note: 'Recommends a visit once the next upgrade set raises your theoretical max wave by at least two waves. This reduces very short visits.' },
+    { key: 'p3', label: 'At least 3% progress', waves: 0, pct: 0.03, note: 'Recommends a visit once the next upgrade set raises your theoretical max wave by at least 3%. This reduces the number of visits and may lengthen the overall completion time.' },
+    { key: 'p5', label: 'At least 5% progress', waves: 0, pct: 0.05, note: 'Recommends a visit once the next upgrade set raises your theoretical max wave by at least 5%. This produces the fewest visits and typically lengthens the overall completion time.' }
+  ];
+  const minProgOf = key => MINPROG.find(m => m.key === key) || MINPROG[0];
   const EVENT_MONTHS = [1, 3, 5, 7, 9, 11]; // Feb, Apr, Jun, Aug, Oct, Dec
   const STD_SET = { hp: 3, atk: 0, speed: 1, x2: 1 };
 
   function defaults() {
     return { P: 0, useGems: false, gems: { atk: 0, hp: 0, speed: 0, x2: 0 }, cur: [0, 0, 0, 0], lv: {},
-      manual: false, days: 0, hours: 0, mins: 0, goal: 250, interval: 'auto', lastCheckin: null, ui: {} };
+      manual: false, days: 0, hours: 0, mins: 0, goal: 250, interval: 'auto', minProg: 'auto', lastCheckin: null, ui: {} };
   }
   let S = defaults();
   let hadSaved = false;
@@ -1000,7 +1034,7 @@ const Engine = (function () {
     const lv = clampLevels(P, S.lv);
     const es = eventState();
     return { P, gems, ownedGems, lv, cur: S.cur.map(v => Math.max(0, num(v, 0))), remainH: clamp(es.remainH, 0.25, 24 * 120), T0: es.T0,
-      goal: clamp(Math.round(num(S.goal, 250)), 5, 1000), interval: S.interval === 'auto' ? 'auto' : num(S.interval, 1),
+      goal: clamp(Math.round(num(S.goal, 250)), 5, 1000), interval: S.interval === 'auto' ? 'auto' : num(S.interval, 1), minProg: minProgOf(S.minProg).key,
       gm,
       prevGapH: S.lastCheckin ? clamp((es.now - S.lastCheckin) / 3600000, 0.05, 48) : null };
   }
@@ -1012,11 +1046,13 @@ const Engine = (function () {
       '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="' + id + '" value="' + val + '"' + '></div>';
   }
   function buildInputs() {
-    let h = '<p class="setupnote" id="setupNote"' + (S.ui.setupDone ? ' hidden' : '') + '>Fill in each step below. The plan stays paused until you press <b>Setup complete</b>.</p>';
+    let h = '<p class="setupnote" id="setupNote"' + (S.ui.setupDone ? ' hidden' : '') + '>Complete each step below, then select <b>Setup complete</b>. The plan is paused until then.</p>';
     // 0. Event settings
     h += '<section class="panel"><h2><span class="stepno">0</span>Event Settings</h2>' + field('Wave goal', 'in_goal', S.goal, { min: 5, hint: 'Default 250' });
     h += '<div class="field"><label for="in_interval">Time between upgrade sets</label><select id="in_interval"><option value="auto">Auto</option>' + INTERVALS.map(v => '<option value="' + v + '">' + ivLabel(v) + '</option>').join('') + '</select></div>';
     h += '<p class="note" id="ivDesc">' + lastIvDesc + '</p>';
+    h += '<div class="field"><label for="in_minprog">Minimum progress per visit</label><select id="in_minprog">' + MINPROG.map(m => '<option value="' + m.key + '">' + m.label + '</option>').join('') + '</select></div>';
+    h += '<p class="note" id="mpDesc"></p>';
     h += '<label class="chk"><input type="checkbox" id="in_manual"' + (S.manual ? ' checked' : '') + '> Set the time left manually</label>';
     h += '<div id="manualTime"' + (S.manual ? '' : ' hidden') + '><div class="field"><label>Time left</label><div class="timefield">' +
       '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_days" value="' + S.days + '"><span>d</span>' +
@@ -1054,6 +1090,7 @@ const Engine = (function () {
     h += '</details></section>';
     $('#inputs').innerHTML = h;
     $('#in_interval').value = String(S.interval);
+    $('#in_minprog').value = minProgOf(S.minProg).key; syncMinProg();
     wire();
     refreshRows();
     renderEventInfo();
@@ -1075,15 +1112,15 @@ const Engine = (function () {
       if (num(inp.value, 0) > L || (locked && inp.value !== '0')) {
         const typedHigher = num(inp.value, 0) > L;
         inp.value = L; S.lv[u.id] = L;
-        if (typedHigher && document.activeElement === inp && !locked) numTip(inp, 'Highest allowed is ' + L);
+        if (typedHigher && document.activeElement === inp && !locked) numTip(inp, 'Maximum allowed: ' + L);
       }
       row.querySelector('.mx').textContent = locked ? '' : mx;
       const cs = row.querySelector('.cs');
       if (prestigeLocked) { cs.innerHTML = '<span class="pill">' + LOCK + 'P' + u.unlock + '</span>'; delete cs.dataset.k; }
-      else if (chainLocked) { cs.innerHTML = '<span class="pill">' + LOCK + 'row above first</span>'; delete cs.dataset.k; }
+      else if (chainLocked) { cs.innerHTML = '<span class="pill">' + LOCK + 'needs row above</span>'; delete cs.dataset.k; }
       else if (L >= mx) { cs.innerHTML = '<span class="pill ok">max</span>'; delete cs.dataset.k; }
       else { cs.textContent = fmt(E.nextCost(u, L)); cs.dataset.k = 'cost'; }
-      row.title = prestigeLocked ? 'Unlocks at prestige tier ' + u.unlock + '.' : (chainLocked ? 'Buy at least 1 level of the upgrade above this one first.' : '');
+      row.title = prestigeLocked ? 'Unlocks at prestige tier ' + u.unlock + '.' : (chainLocked ? 'Requires at least 1 level in the upgrade above.' : '');
       row.setAttribute('aria-disabled', locked ? 'true' : 'false');
       row.classList.toggle('blankwarn', showBlankHints && !S.ui.setupDone && blankSet.has(u.id));
     });
@@ -1095,14 +1132,14 @@ const Engine = (function () {
       const el = $('#tc_' + t); if (el) el.textContent = o + ' of ' + list.length + ' open';
     }
     const un = $('#upNote');
-    if (un) un.textContent = S.ui.setupDone ? 'Locked rows open with your prestige tier or the row above.' : 'Enter what you own. A level above a row\'s normal maximum raises the tier cap upgrades and Cap of Cap Upgrades for you. Rows above your lowest filled upgrade should not be blank, and you will be asked to check them.';
+    if (un) un.textContent = S.ui.setupDone ? 'Rows unlock with your prestige tier and once the row above has at least 1 level.' : 'Enter the levels you own. If a level exceeds a row\'s normal maximum, the tier cap upgrades and Cap of Cap Upgrades are raised automatically. Rows above your lowest filled upgrade in a tier should not be left blank. You will be prompted to review them when you complete setup.';
     const us = $('#upSum'); if (us) us.textContent = openAll + ' of ' + E.UPG.length + ' open';
     const pi = $('#presInfo');
     if (pi) {
       let nextP = null;
       E.UPG.forEach(u => { if (u.unlock > n.P && (nextP === null || u.unlock < nextP)) nextP = u.unlock; });
       const names = nextP === null ? [] : E.UPG.filter(u => u.unlock === nextP).map(u => u.name);
-      pi.textContent = nextP === null ? 'Every upgrade is open.' : 'Next unlock at P' + nextP + ': ' + names.slice(0, 2).join(', ') + (names.length > 2 ? ' and ' + (names.length - 2) + ' more' : '') + '.';
+      pi.textContent = nextP === null ? 'All upgrades are unlocked.' : 'Next unlock at P' + nextP + ': ' + names.slice(0, 2).join(', ') + (names.length > 2 ? ' and ' + (names.length - 2) + ' more' : '') + '.';
     }
     const gl = $('#gemLimits');
     if (gl) gl.textContent = 'Max at P' + n.P + ': HP and Attack ' + n.gm.hp + ', Event Speed ' + n.gm.speed + '.';
@@ -1219,10 +1256,10 @@ const Engine = (function () {
       message: (v, cleared, before, aff) => {
         if (isCap) {
           const scope = u.kind === 'capcap' ? 'every tier cap upgrade' : 'the other Tier ' + u.tier + ' upgrades';
-          return (cleared ? 'You cleared "' + u.name + '", which had ' + before + ' levels. That sets it to 0.' : '"' + u.name + '" is now ' + v + ', lower than the ' + before + ' you had.') +
-            ' This also lowers the maximum of ' + scope + (aff.length ? ', so these levels will be reduced: ' + lossList(aff) + '.' : '. None of your current levels are above the new maximums.') + '\n\nKeep this value?';
+          return (cleared ? 'The field for "' + u.name + '" was cleared. It previously had ' + before + ' levels, and clearing it sets it to 0.' : '"' + u.name + '" will be set to ' + v + ', down from ' + before + '.') +
+            ' This also lowers the maximum level of ' + scope + '. ' + (aff.length ? 'These levels will be reduced: ' + lossList(aff) + '.' : 'None of your current levels exceed the new maximums.') + '\n\nKeep this value?';
         }
-        return (cleared ? 'You cleared "' + u.name + '". ' : 'Setting "' + u.name + '" to ' + v + ' ') + 'locks the rows below it in Tier ' + u.tier + ', so these levels will reset: ' + lossList(aff) + '.\n\nKeep this value?';
+        return (cleared ? 'The field for "' + u.name + '" was cleared. ' : 'Setting "' + u.name + '" to ' + v + ' ') + 'locks the rows below it in Tier ' + u.tier + '. These levels will be reset: ' + lossList(aff) + '.\n\nKeep this value?';
       }
     });
   }
@@ -1238,8 +1275,14 @@ const Engine = (function () {
         [['Max HP gem', n.ownedGems.hp, gm.hp], ['Attack Damage gem', n.ownedGems.atk, gm.atk], ['Event Speed gem', n.ownedGems.speed, gm.speed]].forEach(([nm, cur, mx]) => { if (cur > mx) out.push({ name: nm, before: cur, after: mx }); });
         return out;
       },
-      message: (v, cleared, before, aff) => (cleared ? 'You cleared the prestige tier, which was ' + before + '. That sets it to P0, ' : 'Setting the prestige tier to P' + v + ' (from P' + before + ') ') + 'which locks upgrades and lowers the gem limits, so these will be reduced: ' + lossList(aff) + '.\n\nKeep this value?'
+      message: (v, cleared, before, aff) => (cleared ? 'The prestige tier field was cleared. This sets it to P0 (previously P' + before + ')' : 'Changing the prestige tier from P' + before + ' to P' + v) + ' locks some upgrades and lowers the gem limits. These will be reduced: ' + lossList(aff) + '.\n\nKeep this value?'
     });
+  }
+  function syncMinProg() {
+    const sel = $('#in_minprog'), d = $('#mpDesc'); if (!sel) return;
+    const auto = S.interval === 'auto';
+    sel.disabled = !auto;
+    d.textContent = auto ? minProgOf(S.minProg).note : 'Applies when the time between upgrade sets is set to Auto.';
   }
   function wire() {
     document.querySelectorAll('#inputs input.int').forEach(el => {
@@ -1252,7 +1295,8 @@ const Engine = (function () {
     for (let t = 1; t <= 4; t++) bindNum('in_cur' + t, v => { S.cur[t - 1] = v; S.curAt = Date.now(); });
     E.UPG.forEach(u => guardUpgrade(u));
     guardPrestige();
-    $('#in_interval').addEventListener('change', e => { S.interval = e.target.value; save(); compute(); });
+    $('#in_interval').addEventListener('change', e => { S.interval = e.target.value; save(); syncMinProg(); compute(); });
+    $('#in_minprog').addEventListener('change', e => { S.minProg = e.target.value; save(); syncMinProg(); compute(); });
     $('#in_gx2').addEventListener('change', e => { S.gems.x2 = e.target.checked ? 1 : 0; save(); schedule(); });
     $('#in_usegems').addEventListener('change', e => {
       S.useGems = e.target.checked; $('#gemFields').hidden = !S.useGems; save(); compute();
@@ -1269,7 +1313,7 @@ const Engine = (function () {
 
   }
   $('#btnReset').addEventListener('click', () => {
-    if (!window.confirm('Reset every input to its default?')) return;
+    if (!window.confirm('Reset all inputs to their defaults?')) return;
     const keep = S.ui; S = defaults(); S.ui = keep; S.ui.setupDone = false; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
   });
   // Plan / Setup tabs (phones and narrow windows only; wide screens show both)
@@ -1290,12 +1334,13 @@ const Engine = (function () {
   }
   function withGems(n, g) { return Object.assign({}, n, { gems: g }); }
   // policy: a number (fixed interval in hours) or { G } (adaptive: target gain per visit)
-  function sim(n, policy, lambda, remainH, path) {
-    const o = { P: n.P, gems: n.gems, lv: n.lv, cur: n.cur, remainH: remainH || n.remainH, goal: n.goal, lambda, prevGapH: n.prevGapH };
+  function simOpts(n, policy, lambda, remainH, path, extra) {
+    const o = Object.assign({ P: n.P, gems: n.gems, lv: n.lv, cur: n.cur, remainH: remainH || n.remainH, goal: n.goal, lambda, prevGapH: n.prevGapH }, extra || {});
     if (path) o.path = path;
     if (typeof policy === 'number') o.intervalH = policy; else o.adaptG = policy.G;
-    return E.simulate(o);
+    return o;
   }
+  function sim(n, policy, lambda, remainH, path, extra) { return E.simulate(simOpts(n, policy, lambda, remainH, path, extra)); }
   function* pipeline(n) {
     let best = null;
     for (let i = 0; i < LAMBDAS.length; i++) {
@@ -1351,6 +1396,16 @@ const Engine = (function () {
       }
     }
     const pathArg = usedPath ? usedPath.path : null;
+    // Auto timing: every recommended visit must lift the theoretical max wave by the chosen minimum (pausable, so the page stays responsive)
+    if (policy.type === 'auto') {
+      const mp = minProgOf(n.minProg);
+      if (mp.waves || mp.pct) {
+        const gen = E.simulateGen(simOpts(n, policy.arg, lambda, null, pathArg, { minWaves: mp.waves, minProgress: mp.pct }));
+        let r = gen.next();
+        while (!r.done) { yield 'minprog'; r = gen.next(); }
+        chosen = r.value;
+      }
+    }
     // when the goal is out of reach, also see what maxed gems (as available at this prestige tier) would manage
     let maxed = null;
     if (!chosen.attainable) {
@@ -1383,9 +1438,9 @@ const Engine = (function () {
     token++; clearDirty();
     $('#top').classList.remove('busy');
     $('#sbMain').classList.remove('ok', 'bad');
-    $('#sbLab').textContent = 'Setup'; $('#sbBig').textContent = 'Not started'; $('#sbSub').textContent = 'Enter steps 0 to 4, then press Setup complete.';
+    $('#sbLab').textContent = 'Setup'; $('#sbBig').textContent = 'Not started'; $('#sbSub').textContent = 'Complete steps 0 to 4, then select Setup complete.';
     $('#sbCheck .lab').textContent = 'Next upgrade set'; $('#ckBig').textContent = '-'; $('#ckSub').textContent = '';
-    $('#results').innerHTML = '<section class="panel"><h2>Your plan</h2><p>Your plan appears here once your setup is complete. Nothing updates while you enter your values, so take your time.</p></section>';
+    $('#results').innerHTML = '<section class="panel"><h2>Your plan</h2><p>Your plan appears here once setup is complete. Nothing is calculated while you enter your values.</p></section>';
     PLAN = null;
     $('#setupBar').classList.add('show');
     const sn = $('#setupNote'); if (sn) sn.hidden = false;
@@ -1401,8 +1456,8 @@ const Engine = (function () {
       showBlankHints = true; refreshRows();
       const byTier = {}; blanks.forEach(w => { (byTier[w.tier] = byTier[w.tier] || []).push(w.name); });
       const lines = Object.keys(byTier).map(t => { const n = byTier[t]; return 'Tier ' + t + ': ' + n.slice(0, 4).join('; ') + (n.length > 4 ? ' and ' + (n.length - 4) + ' more' : ''); }).join('\n');
-      const msg = 'Some upgrades look skipped:\n\n' + lines +
-        '\n\nIn the game you need a level in each upgrade above one you own, so these may be mistakes.\n\nOK: continue and count them as level 1.\nCancel: go back and fill them in. They will be highlighted.';
+      const msg = 'Some upgrades above your lowest filled upgrade are blank:\n\n' + lines +
+        '\n\nIn the game, each upgrade requires a level in the upgrades above it, so these may be entry errors.\n\nOK: continue and count each blank upgrade as level 1.\nCancel: return to setup. The affected rows will be highlighted.';
       if (!window.confirm(msg)) {
         setTab('setup');
         const el = $('#lv_' + blanks[0].id); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
@@ -1427,7 +1482,7 @@ const Engine = (function () {
     function step() {
       if (my !== token) return;
       let r;
-      try { r = gen.next(); } catch (err) { $('#sbBig').textContent = 'Something went wrong'; $('#sbSub').textContent = err.message; setBusy(false); return; }
+      try { r = gen.next(); } catch (err) { if (window.console) console.error(err); $('#sbBig').textContent = 'Calculation error'; $('#sbSub').textContent = 'Please refresh the page and try again.'; setBusy(false); return; }
       if (r.done) { render(n, r.value); setBusy(false); gemWork(n, r.value, my); }
       else setTimeout(step, 0);
     }
@@ -1437,10 +1492,10 @@ const Engine = (function () {
   /* ---------- plan helpers ---------- */
   function curLine(c) { return [0, 1, 2, 3].filter(i => c[i] > 0.5).map(i => TIER_NAME[i + 1] + ' ' + fmt(c[i])).join(', ') || 'nothing'; }
   // One step per upgrade: every purchase of the same upgrade in a set is bundled into a single "level A to B" step.
-  // Order: the planner's order of importance, except that Cap of Cap Upgrades goes to the top when a cap upgrade in the set needs it,
-  // a cap upgrade sits directly above the first upgrade that has to climb
-  // past its current maximum (already capped, or about to be), and a row's first level sits above the rows that depend on it.
-  function mergeSteps(buys, startLv) {
+  // mode 'impact': Cap of Cap Upgrades first; then tier by tier, each tier's cap upgrade followed by that tier's upgrades from most to least impactful.
+  // mode 'tier'  : tier by tier in the order of each tier's list; Cap of Cap goes to the top when a cap upgrade needs it.
+  // Either way a cap upgrade sits above any upgrade that has to climb past its maximum, and a row's first level sits above the rows that depend on it.
+  function mergeSteps(buys, startLv, mode, impacts) {
     const byId = {}, order = [];
     buys.forEach(b => {
       const s = byId[b.id];
@@ -1456,6 +1511,18 @@ const Engine = (function () {
       if (u.prev && (startLv[u.prev.id] || 0) < 1 && byId[u.prev.id]) need.add(byId[u.prev.id]);   // unlocks after the row above has a level
       deps.set(s, need);
     });
+    const rowIdx = s => E.BY_TIER[s.tier].findIndex(x => x.id === s.id), kindOf = s => E.BY_ID[s.id].kind;
+    let desired;
+    if (mode === 'impact') {
+      const imp = id => (impacts && impacts[id]) || 0;
+      desired = order.filter(s => kindOf(s) === 'capcap');                       // Cap of Cap Upgrades at the very top
+      for (let t = 1; t <= 4; t++) {                                              // then each tier: its cap upgrade, then its upgrades by impact
+        desired = desired.concat(order.filter(s => s.tier === t && kindOf(s) === 'cap'),
+          order.filter(s => s.tier === t && !kindOf(s)).sort((a, b) => imp(b.id) - imp(a.id) || rowIdx(a) - rowIdx(b)));
+      }
+    } else {
+      desired = order.slice().sort((a, b) => a.tier - b.tier || rowIdx(a) - rowIdx(b));
+    }
     const out = [], placed = new Set(), visiting = new Set();
     const place = s => {
       if (placed.has(s) || visiting.has(s)) return;
@@ -1465,10 +1532,39 @@ const Engine = (function () {
       if (!placed.has(s)) { out.push(s); placed.add(s); }
     };
     const cc = byId[E.CAPCAP_ID];
-    if (cc && order.some(s => { const u2 = E.BY_ID[s.id]; return u2.kind === 'cap' && s.to > E.maxLevel(u2, startLv); })) place(cc);   // top of the set
-    order.forEach(place);
+    if (mode !== 'impact' && cc && order.some(s => { const u2 = E.BY_ID[s.id]; return u2.kind === 'cap' && s.to > E.maxLevel(u2, startLv); })) place(cc);   // top of the set
+    desired.forEach(place);
     return out;
   }
+  // How much each step adds to the planner's own score (progress and speed): the score with the whole set minus the score without that step.
+  function stepImpacts(steps, startLv, P, gems, target, lambda) {
+    const all = Object.assign({}, startLv); steps.forEach(s => { all[s.id] = s.to; });
+    const score = lv => E.evalBuild(E.computeStats(P, gems, clampLevels(P, lv, true)), target, lambda).J;
+    const jAll = score(all), out = {};
+    steps.forEach(s => { const m = Object.assign({}, all); m[s.id] = s.from; out[s.id] = jAll - score(m); });
+    return out;
+  }
+  function orderedSteps(buys, start, P, target) {
+    const mode = S.ui.order || 'impact';
+    if (mode !== 'impact' || !PLAN) return mergeSteps(buys, start, 'tier');
+    const lam = PLAN.R && PLAN.R.lambda != null ? PLAN.R.lambda : 20;
+    return mergeSteps(buys, start, 'impact', stepImpacts(mergeSteps(buys, start, 'tier'), start, P, PLAN.n.gems, target, lam));
+  }
+  const ORDER_OPTS = [['impact', 'Most impactful first'], ['tier', 'Tier order']];
+  function orderSelect() {
+    const cur = S.ui.order || 'impact';
+    return '<label class="ordsel"><span>Order</span><select class="ordSel" aria-label="Order of the upgrade set">' +
+      ORDER_OPTS.map(o => '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>';
+  }
+  function setOrder(v) {
+    S.ui.order = v; save();
+    if (!PLAN) return;
+    const doneIds = new Set(PLAN.steps.filter(s => s.done).map(s => s.id));
+    PLAN.steps = orderedSteps(PLAN.firstBuys, PLAN.firstStart, PLAN.firstP, PLAN.target);
+    PLAN.steps.forEach(s => { if (doneIds.has(s.id)) s.done = true; });
+    renderStep(); refreshStats();
+  }
+  document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('ordSel')) setOrder(e.target.value); });
   function syncInputs(skip) {
     for (let t = 1; t <= 4; t++) { const el = $('#in_cur' + t); if (el && el !== skip) el.value = Math.round(S.cur[t - 1]); }
     E.UPG.forEach(u => { const el = $('#lv_' + u.id); if (el && el !== skip) el.value = S.lv[u.id] || 0; });
@@ -1520,9 +1616,9 @@ const Engine = (function () {
     return { t, at: now + t * 3600000, need, held, est, hasSet };
   }
   function ciNeedText(ci) {
-    if (!ci.hasSet) return 'Nothing worth buying yet, so give the game a little more time.';
-    if (ci.t <= 0) return 'You should hold enough for the next set (' + curLine(ci.need) + '). Enter your currency if you like, then press Show my upgrade set.';
-    return 'Let your game run so currency builds up. The next set needs ' + curLine(ci.need) + '.';
+    if (!ci.hasSet) return 'No purchases are recommended yet. Allow more time for currency to accumulate.';
+    if (ci.t <= 0) return 'You should now have enough currency for the next set (' + curLine(ci.need) + '). Optionally enter your actual currency, then select Show my upgrade set.';
+    return 'Allow the game to run so currency can accumulate. The next set requires ' + curLine(ci.need) + '.';
   }
   function updateStatusCheckin() {
     if (!PLAN) return;
@@ -1572,23 +1668,23 @@ const Engine = (function () {
     let h = '';
     if (PLAN.view === 'buy') {
       const firstOpen = steps.findIndex(s => !s.done);
-      h = '<h2>Buy now</h2>';
+      h = '<div class="hrow"><h2>Buy now</h2>' + orderSelect() + '</div>';
       steps.forEach((s, i) => {
         const isNext = i === firstOpen;
         h += '<div class="buy t' + s.tier + (s.done ? ' done' : '') + '">' + tag(s.tier) + '<div class="nm">' + s.name + '<div class="lv">level ' + s.from + ' to ' + s.to + '</div></div>' +
-          '<div class="cost">' + fmt(s.cost) + '</div><button type="button" class="donebtn' + (isNext ? ' primary' : '') + '" data-step="' + i + '"' + (isNext ? '' : ' disabled title="Finish the step above first"') + '>Done</button></div>';
+          '<div class="cost">' + fmt(s.cost) + '</div><button type="button" class="donebtn' + (isNext ? ' primary' : '') + '" data-step="' + i + '"' + (isNext ? '' : ' disabled title="Complete the step above first"') + '>Done</button></div>';
       });
-      h += '<div class="row2" style="margin-top:10px"><button type="button" id="btnAllDone">Mark all done</button><span class="note">Expect to clear about ' + wl(PLAN.x) + ' after these.</span></div>';
+      h += '<div class="row2" style="margin-top:10px"><button type="button" id="btnAllDone">Mark all done</button><span class="note">Expected to reach about ' + wl(PLAN.x) + ' after these purchases.</span></div>';
     } else if (PLAN.view === 'finish') {
-      h = '<h2>Goal run</h2><p>Your build can reach W' + n.goal + '. A run takes about ' + dur(prof.tTarget) + '. No more purchases are needed.</p>';
+      h = '<h2>Goal run</h2><p>Your build can reach W' + n.goal + '. A run takes about ' + dur(prof.tTarget) + '. No further purchases are needed.</p>';
     } else if (PLAN.view === 'prestige') {
-      h = '<h2>Prestige for P' + PLAN.tier + '</h2><p>Your build can reach wave ' + PLAN.target + ' in about ' + dur(prof.tTarget) + '. Prestige when the run gets there. It resets non-gem upgrades and currency.</p>' +
+      h = '<h2>Prestige for P' + PLAN.tier + '</h2><p>Your build can reach wave ' + PLAN.target + ' in about ' + dur(prof.tTarget) + '. Prestige when your run reaches this wave. Prestiging resets non-gem upgrades and currency.</p>' +
         '<div class="row2"><button type="button" class="primary" id="btnPrestigeDone">Prestige done</button></div>';
     } else {
       const ci = PLAN.ci;
       h = '<h2>Next upgrade set</h2><div class="waitbig" id="ciClock">' + (ci.t <= 0 ? 'Ready now' : 'Ready around ' + shortClock(ci.at)) + '</div>' +
         '<div class="cdline"><b class="cd" id="ciCd"' + (ci.t <= 0 ? ' hidden' : '') + ' data-at="' + ci.at + '">' + fmtIn(ci.at - Date.now()) + '</b> <span id="ciNeed">' + ciNeedText(ci) + '</span></div>' +
-        '<div class="nxlabel">Currency you hold. These fill in with estimates from your expected gains. Type a number to use your own.</div><div class="nxrow">' +
+        '<div class="nxlabel">Currency on hand. Values are estimated from expected earnings. Enter your actual amounts to override them.</div><div class="nxrow">' +
         [1, 2, 3, 4].map(t => '<label class="nf t' + t + '"><b>T' + t + '</b><input class="int" type="text" inputmode="numeric" pattern="[0-9]*" id="nx_c' + t + '" value="' + Math.max(0, Math.round(ci.held[t - 1])) + '" autocomplete="off" enterkeyhint="done"></label>').join('') + '</div>' +
         '<div class="row2"><button type="button" class="primary" id="btnCheckinDone">Show my upgrade set</button></div>';
     }
@@ -1655,8 +1751,8 @@ const Engine = (function () {
       }
       return '<div class="tl chk"><div class="tlh">Let currency build</div><div class="tlw">About ' + durShort(b.gap) + ' after the set above</div><p>You should hold about ' + curLine(e.before) + '.</p></div>';
     }
-    const m = mergeSteps(e.buys, b.start);
-    if (!m.length) return '<div class="tl buyc quiet"><div class="tlh">Upgrade set</div><p>Nothing worth buying yet. You should still clear about ' + wl(e.x) + '.</p></div>';
+    const m = orderedSteps(e.buys, b.start, e.P, e.target);
+    if (!m.length) return '<div class="tl buyc quiet"><div class="tlh">Upgrade set</div><p>No purchases are recommended yet. Expected to reach about ' + wl(e.x) + '.</p></div>';
     return '<div class="tl buyc"><div class="tlh">Upgrade set</div>' + m.map(s => '<div class="step">' + tag(s.tier) + ' ' + s.name + ' <span class="muted">level ' + s.from + ' to ' + s.to + ', cost: ' + fmt(s.cost) + '</span></div>').join('') +
       '<p class="expect">Then you should clear about ' + wl(e.x) + '.</p></div>';
   }
@@ -1664,7 +1760,8 @@ const Engine = (function () {
     const el = $('#planPanel'); if (!el || !PLAN) return;
     const skip = PLAN.view === 'buy' ? 0 : 1;           // the Next step panel already shows the current block
     const show = PLAN.blocks.slice(skip, skip + 2);
-    let h = '<h2>Upgrade Plan</h2>';
+    const hasBuy = show.some(b => b.type === 'buy');
+    let h = '<div class="hrow"><h2>Upgrade Plan</h2>' + (hasBuy && PLAN.view !== 'buy' ? orderSelect() : '') + '</div>';
     if (!show.length) h += '<p class="note">Nothing further planned.</p>';
     else h += '<div class="timeline">' + show.map((b, i) => blockHtml(b, skip === 0 && i === 0)).join('') + '</div>';
     el.innerHTML = h;
@@ -1714,10 +1811,10 @@ const Engine = (function () {
       $('#sbBig').textContent = 'W' + n.goal + ' in ' + dur(res.completionH);
       $('#sbSub').textContent = dur(slack) + ' to spare';
     } else {
-      $('#sbLab').textContent = 'Out of reach in time';
-      $('#sbBig').textContent = 'Max wave: W' + res.maxWave;
-      const need = R.needH ? 'W' + n.goal + ' needs ' + dur(R.needH) + ', ' + dur(R.needH - n.remainH) + ' late.' : 'Tops out near W' + (R.extMax || res.maxWave) + ' with more time.';
-      const gemLine = R.maxed ? (R.maxed.r.attainable ? 'Maxed gems (P' + n.P + ') reach W' + n.goal + ' in ' + dur(R.maxed.r.completionH) : 'Maxed gems (P' + n.P + '): W' + R.maxed.r.maxWave) : '';
+      $('#sbLab').textContent = 'Not reachable in time';
+      $('#sbBig').textContent = 'Projected max wave: W' + res.maxWave;
+      const need = R.needH ? 'W' + n.goal + ' would require about ' + dur(R.needH) + ', which is ' + dur(R.needH - n.remainH) + ' beyond the time remaining.' : 'Projected maximum with additional time: about W' + (R.extMax || res.maxWave) + '.';
+      const gemLine = R.maxed ? (R.maxed.r.attainable ? 'With maximum gems (P' + n.P + '): W' + n.goal + ' in ' + dur(R.maxed.r.completionH) : 'With maximum gems (P' + n.P + '): W' + R.maxed.r.maxWave) : '';
       $('#sbSub').innerHTML = (gemLine ? gemLine + '<br>' : '') + need;
     }
 
@@ -1728,12 +1825,14 @@ const Engine = (function () {
       startLvs[i] = Object.assign({}, runLv);
       e.buys.forEach(b => { runLv[b.id] = b.to; });
     });
-    PLAN = { steps: mergeSteps(first.buys, startLvs[ev.indexOf(first)]), target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev, startLvs), n, R };
+    const firstStart = startLvs[ev.indexOf(first)];
+    PLAN = { firstBuys: first.buys, firstStart, firstP: first.P, steps: [], target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev, startLvs), n, R };
+    PLAN.steps = orderedSteps(first.buys, firstStart, first.P, first.target);
 
     // one-line summary under the time-between-sets setting
     const sets = ev.filter(e => e.type === 'checkin' && e.buys.length).length;
-    lastIvDesc = (S.goal > 1000 ? 'Planned as W1000, the furthest the model covers. ' : '') + 'Expected max wave W' + res.maxWave + ' in ' + sets + ' upgrade sets' +
-      (res.attainable ? ', done in about ' + dur(res.completionH) + '.' : '. W' + n.goal + ' is out of reach in time.');
+    lastIvDesc = (S.goal > 1000 ? 'Goals above W1000 are planned as W1000, the highest wave supported. ' : '') + 'Expected max wave: W' + res.maxWave + ' in ' + sets + ' upgrade sets' +
+      (res.attainable ? ', completing in about ' + dur(res.completionH) + '.' : '. W' + n.goal + ' is not reachable in the time remaining.');
     const ivDesc = $('#ivDesc'); if (ivDesc) ivDesc.textContent = lastIvDesc;
 
     const html = [];
@@ -1744,19 +1843,19 @@ const Engine = (function () {
     html.push(det('stats', 'Stats and Breakpoints', '<div id="statsBody">' + statsHtml() + '</div>', false));
 
     html.push(det('how', 'How it works',
-      '<h3>Set up once</h3><ol class="plain">' +
-      '<li><b>Event Settings:</b> set your wave goal. The time left comes from your device clock.</li>' +
+      '<h3>Initial setup</h3><ol class="plain">' +
+      '<li><b>Event Settings:</b> set your wave goal. The time remaining is taken from your device clock.</li>' +
       '<li><b>Prestige:</b> enter your current prestige tier.</li>' +
-      '<li><b>Event Currency:</b> enter the currency you hold right now.</li>' +
-      '<li><b>Gems:</b> tick Use gems if you own gem upgrades, then enter your levels. The Rec. column shows the cheapest levels that still reach your goal in time.</li>' +
-      '<li><b>Upgrades:</b> enter the level of every upgrade you own. Locked rows open with your prestige tier or once the row above has a level.</li>' +
-      '<li>Press <b>Setup complete</b>. Nothing updates until you do.</li>' +
-      '</ol><h3 style="margin-top:12px">Then, every round</h3><ol class="plain">' +
-      '<li>Under <b>Buy now</b>, buy each upgrade in the game and press Done.</li>' +
-      '<li>Let the game run until the time shown, so your event currency builds up.</li>' +
-      '<li>The currency boxes fill in with an estimate. Type your real amounts if you like. A box you type in keeps your number. Then press <b>Show my upgrade set</b>.</li>' +
-      '<li>When the planner says <b>Prestige</b>, prestige in the game and press Prestige done.</li>' +
-      '</ol><p class="note" style="margin-top:10px">You only need to come back to Setup when something changes outside the planner, such as new gem levels. Use Import/Export at the top to move your setup to another device.</p>', false));
+      '<li><b>Event Currency:</b> enter the currency you currently hold.</li>' +
+      '<li><b>Gems:</b> select Use gems if you own gem upgrades, then enter your levels. The Rec. column shows the lowest-cost levels that still reach your goal in time.</li>' +
+      '<li><b>Upgrades:</b> enter the level of each upgrade you own. Rows unlock with your prestige tier and once the row above has at least 1 level.</li>' +
+      '<li>Select <b>Setup complete</b>. The plan is calculated once you do.</li>' +
+      '</ol><h3 style="margin-top:12px">Each round</h3><ol class="plain">' +
+      '<li>Under <b>Buy now</b>, purchase each upgrade in the game and select Done. The Order menu sorts the list by impact or by tier.</li>' +
+      '<li>Allow the game to run until the time shown so that event currency can accumulate.</li>' +
+      '<li>The currency fields are pre-filled with an estimate. Enter your actual amounts to override them; a field you edit keeps your value. Then select <b>Show my upgrade set</b>.</li>' +
+      '<li>When the planner indicates <b>Prestige</b>, prestige in the game and select Prestige done.</li>' +
+      '</ol><p class="note" style="margin-top:10px">Return to Setup only when something changes outside the planner, such as new gem levels. Use Import/Export to transfer your setup to another device.</p>', false));
 
     $('#results').innerHTML = html.join('');
     renderStep();
@@ -1844,10 +1943,10 @@ const Engine = (function () {
       const recCost = gemSetCost(own, rec), maxCost = gemSetCost(own, mx), fullRecCost = gemSetCost(none, rec);
       const goalTxt = 'W' + n.goal;
       let note = noGem.attainable
-        ? 'Optional. ' + goalTxt + ' is reachable without gems (about ' + dur(noGem.completionH) + ').'
-        : 'Without gems ' + goalTxt + ' is out of reach (best W' + noGem.maxWave + ').' + (state === 'short' ? ' Even maxed gems fall short (best W' + recRes.maxWave + ').' : ' Cheapest fix: ' + fmt(fullRecCost) + ' gems.');
-      if (!S.useGems && !noGem.attainable) note += ' Turn on Use gems for the levels.';
-      const summary = 'Recommended costs ' + fmt(recCost) + ' more gems. Maxing everything costs ' + fmt(maxCost) + '.' + (state !== 'none' && recCost === 0 ? ' You already own this much.' : '');
+        ? 'Gems are optional. ' + goalTxt + ' is reachable without them in about ' + dur(noGem.completionH) + '.'
+        : goalTxt + ' is not reachable without gems (best: W' + noGem.maxWave + ').' + (state === 'short' ? ' Even maximum gems fall short (best: W' + recRes.maxWave + ').' : ' Minimum gems needed: ' + fmt(fullRecCost) + '.');
+      if (!S.useGems && !noGem.attainable) note += ' Enable Use gems to apply the recommended levels.';
+      const summary = 'The recommended levels require ' + fmt(recCost) + ' additional gems. Maximum levels require ' + fmt(maxCost) + '.' + (state !== 'none' && recCost === 0 ? ' You already own the recommended levels.' : '');
       lastGemInfo = { note, rec, summary };
       if (my === token) applyGemInfo(lastGemInfo);
     }
@@ -1862,70 +1961,71 @@ const Engine = (function () {
      Item kinds: 'new' (something you can now do), 'changed' (something works differently or better), 'fix' (a problem that is now solved).
      Note: blocks dated Sep 26 and earlier carry illustrative dates spread over a month. Real dates start with the Oct 3 block. */
   const CHANGELOG = [
-    { id: '2026-10-04-2', date: '2026-10-04', title: 'Latest updates', items: [
-      ['fix', 'Highlighted blank rows in setup no longer run over the "next" cost text, and the Setup complete warning is shorter and easier to read.'],
-      ['changed', 'First-time setup lets you enter any upgrade level you own. If a level is above a row\'s normal maximum, the tier cap upgrade and Cap of Cap Upgrades are raised for you.'],
-      ['changed', 'Rows above are left blank for you to fill in. When you press Setup complete, you are warned about blank rows above the lowest upgrade you filled in each tier, they are highlighted, and you can go back or continue with them counted as level 1.'] ] },
-    { id: '2026-10-03-3', date: '2026-10-03', title: 'Latest updates', items: [
-      ['changed', 'When an upgrade set includes Cap of Cap Upgrades that other cap upgrades depend on, it is now listed at the very top of the set.'],
-      ['fix', 'The Stats section now updates right away when you mark a purchase as done.'],
-      ['changed', 'If a set has several levels of the same upgrade, you now see one line (for example "level 14 to 18") with the cost labelled.'],
-      ['changed', 'In an upgrade set, a cap upgrade sits directly above the first upgrade that needs it. Every other upgrade stays in the planner\'s order of importance.'],
-      ['changed', 'After setup, the plan updates when you leave a field or pause typing, so entering numbers feels smoother.'],
-      ['changed', 'The "Setup code" button is now called "Import/Export", and its window has separate Export and Import sections.'],
-      ['changed', 'Change log entries are grouped by day, and each day lists fixes first, then changes, then new features.'],
-      ['new', 'First-time setup mode. Fill in every step without the plan recalculating, then press Setup complete.'],
-      ['new', 'This change log. Open it from the top of the page to see what changed and when.'] ] },
-    { id: '2026-09-26-a', date: '2026-09-26', title: 'Waiting for currency', items: [
-      ['changed', '"Check-in" is now "Next upgrade set". It reminds you to let the game run so currency builds up.'],
-      ['changed', 'The currency boxes fill in with an estimate, and a number you type stays as you typed it.'],
-      ['changed', 'The Update plan button only appears if a change has not gone through after a few seconds.'] ] },
+    { id: '2026-10-06-1', date: '2026-10-06', title: 'Updates', items: [
+      ['new', 'Order menu for upgrade sets. "Most impactful first" lists Cap of Cap Upgrades at the top when needed, then each tier in turn with its cap upgrade first, followed by that tier\'s upgrades from most to least impactful. "Tier order" follows each tier\'s own list.'],
+      ['new', 'Minimum progress per visit setting in Event Settings, used with Auto timing. Auto recommends a visit once the next upgrade set raises the theoretical max wave by at least 1 wave. Other options: any gain, at least 2 waves, at least 3% and at least 5%.'] ] },
+    { id: '2026-10-04-4', date: '2026-10-04', title: 'Updates', items: [
+      ['changed', 'First-time setup accepts any upgrade level you own. If a level exceeds a row\'s normal maximum, the tier cap upgrade and Cap of Cap Upgrades are raised automatically, and the rows above are left for you to complete.'],
+      ['changed', 'Selecting Setup complete now checks for blank rows above the lowest filled upgrade in each tier. Affected rows are highlighted, and you can return to correct them or continue with each counted as level 1.'] ] },
+    { id: '2026-10-03-3', date: '2026-10-03', title: 'Updates', items: [
+      ['fix', 'The Stats section now updates immediately when a purchase is marked as done.'],
+      ['changed', 'Multiple levels of the same upgrade within a set now appear on one line (for example, "level 14 to 18") with the cost labelled.'],
+      ['changed', 'Within an upgrade set, a cap upgrade is listed directly above the first upgrade that depends on it, and Cap of Cap Upgrades are listed at the very top when other cap upgrades depend on them.'],
+      ['changed', 'After setup, the plan updates when you leave a field or pause typing.'],
+      ['changed', 'The "Setup code" button is now "Import/Export", with separate Export and Import sections.'],
+      ['changed', 'The change log is organized by day. Each day lists fixes first, then changes, then new features.'],
+      ['new', 'First-time setup mode. Enter all values without the plan recalculating, then select Setup complete.'],
+      ['new', 'This change log, available from the top of the page.'] ] },
+    { id: '2026-09-26-a', date: '2026-09-26', title: 'Upgrade set timing', items: [
+      ['changed', '"Check-in" is now "Next upgrade set", with guidance to allow time for currency to accumulate.'],
+      ['changed', 'Currency fields are pre-filled with an estimate, and values you enter are preserved.'],
+      ['changed', 'The Update plan button appears only when a change has not been applied after a few seconds.'] ] },
     { id: '2026-09-25-a', date: '2026-09-25', title: 'Whole numbers only', items: [
-      ['changed', 'Number boxes only take whole numbers. A small "Numbers only" note appears if you try a comma or a period.'],
-      ['new', 'Your prestige tier no longer has a maximum.'] ] },
+      ['changed', 'Number fields accept whole numbers only, with a brief notice if another character is entered.'],
+      ['new', 'The prestige tier no longer has a maximum.'] ] },
     { id: '2026-09-24-a', date: '2026-09-24', title: 'Stats and guide', items: [
-      ['new', 'Stats now shows your expected max wave and average run length.'],
-      ['changed', 'How it works is shorter and covers just what you need to do.'],
+      ['new', 'Stats now shows the expected max wave and average run length.'],
+      ['changed', 'How it works is shorter and covers only the steps you need.'],
       ['changed', 'The Prestige Path section was removed.'] ] },
-    { id: '2026-09-23-a', date: '2026-09-23', title: 'Move your setup between devices', items: [
-      ['new', 'Import/Export. Copy a short code and paste it on another device to bring your setup across.'] ] },
+    { id: '2026-09-23-a', date: '2026-09-23', title: 'Transfer your setup between devices', items: [
+      ['new', 'Import/Export. Copy a short code and paste it on another device to transfer your setup.'] ] },
     { id: '2026-09-22-a', date: '2026-09-22', title: 'Light and dark mode', items: [
-      ['new', 'A light and dark mode button at the top of the page.'] ] },
+      ['new', 'A light and dark mode toggle in the page header.'] ] },
     { id: '2026-09-21-a', date: '2026-09-21', title: 'Safer editing of upgrade caps', items: [
-      ['fix', 'Clearing a cap upgrade box to type a new number no longer cuts down your other upgrades.'],
-      ['changed', 'If a lower number would change other things, you are asked first and told exactly what would change. Your prestige tier and the upgrades that unlock others are protected the same way.'] ] },
-    { id: '2026-09-19-a', date: '2026-09-19', title: 'Pick any wave goal', items: [
+      ['fix', 'Clearing a cap upgrade field to enter a new value no longer reduces your other upgrades.'],
+      ['changed', 'When a lower value would affect other fields, you are asked to confirm and shown exactly what will change. The prestige tier and upgrades that unlock others are protected in the same way.'] ] },
+    { id: '2026-09-19-a', date: '2026-09-19', title: 'Configurable wave goal', items: [
       ['new', 'Set any wave goal, with a one-line summary of the expected max wave and number of upgrade sets.'] ] },
-    { id: '2026-09-18-a', date: '2026-09-18', title: 'Simpler, cleaner layout', items: [
-      ['changed', 'Event time left now sits at the very top.'],
-      ['changed', 'Setup follows the order you fill things in: event settings, prestige, currency, gems, then upgrades.'],
-      ['changed', 'The time for your next upgrade set updates as you enter your currency, based on when you will have enough.'],
-      ['changed', 'The Upgrade Plan always shows your next upgrade set and the wait before it. Repeated explanations were trimmed.'] ] },
-    { id: '2026-09-16-a', date: '2026-09-16', title: 'Works well on phones', items: [
-      ['new', 'Plan and Setup tabs on phones, with larger buttons and number boxes that are easy to tap.'],
-      ['changed', 'Locked upgrades now say why they are locked, either the prestige tier or the upgrade above them.'],
-      ['fix', 'The page no longer jumps around while the plan updates.'] ] },
+    { id: '2026-09-18-a', date: '2026-09-18', title: 'Streamlined layout', items: [
+      ['changed', 'Event time remaining is shown at the top of the page.'],
+      ['changed', 'Setup follows the order of entry: event settings, prestige, currency, gems, then upgrades.'],
+      ['changed', 'The time for your next upgrade set updates as you enter currency, based on when you will have enough.'],
+      ['changed', 'The Upgrade Plan shows the next upgrade set and the wait before it, with repeated explanations removed.'] ] },
+    { id: '2026-09-16-a', date: '2026-09-16', title: 'Mobile experience', items: [
+      ['new', 'Plan and Setup tabs on phones, with larger buttons and fields that are easier to tap.'],
+      ['changed', 'Locked upgrades now indicate why they are locked: the prestige tier or the upgrade above.'],
+      ['fix', 'The page no longer shifts while the plan updates.'] ] },
     { id: '2026-09-14-a', date: '2026-09-14', title: 'Gem recommendations', items: [
       ['new', 'A gem table showing the recommended, owned and maximum level of each gem.'],
-      ['changed', 'Recommended gems are the cheapest set that still reaches your goal in time, and they change as the event time runs down.'],
-      ['changed', 'If your goal cannot be reached, the page shows how far you could get with maxed gems.'] ] },
-    { id: '2026-09-12-a', date: '2026-09-12', title: 'Number limits', items: [
-      ['changed', 'No box accepts more than the maximum for that upgrade or gem.'] ] },
-    { id: '2026-09-10-a', date: '2026-09-10', title: 'Rule fixes', items: [
-      ['fix', 'Prestige Bonus is now counted correctly, confirmed using real stats.'],
-      ['fix', 'Upgrades that only unlock after the one above them are planned correctly.'],
-      ['changed', 'Waves are shown the way the game counts them, for example "W27-2".'] ] },
+      ['changed', 'Recommended gems are the lowest-cost set that still reaches your goal in time, and they update as the remaining event time changes.'],
+      ['changed', 'If your goal cannot be reached, the page shows how far you could get with maximum gems.'] ] },
+    { id: '2026-09-12-a', date: '2026-09-12', title: 'Input limits', items: [
+      ['changed', 'No field accepts a value above the maximum for that upgrade or gem.'] ] },
+    { id: '2026-09-10-a', date: '2026-09-10', title: 'Calculation fixes', items: [
+      ['fix', 'Prestige Bonus is now calculated correctly, verified against real stats.'],
+      ['fix', 'Upgrades that unlock only after the one above are planned correctly.'],
+      ['changed', 'Waves are shown as the game counts them, for example "W27-2".'] ] },
     { id: '2026-09-08-a', date: '2026-09-08', title: 'More accurate predictions', items: [
-      ['changed', 'Predictions were checked against real runs, so waves cleared and run times now match what you see in the game much more closely.'] ] },
-    { id: '2026-09-06-a', date: '2026-09-06', title: 'Smarter planning', items: [
-      ['new', 'Upgrade sets follow your rules, such as buying attack only until enemies fall in one hit.'],
-      ['new', 'The time between upgrade sets adjusts itself.'],
-      ['new', 'The planner works out the fastest route through your prestiges.'] ] },
+      ['changed', 'Predictions were validated against real runs, so waves cleared and run times closely match in-game results.'] ] },
+    { id: '2026-09-06-a', date: '2026-09-06', title: 'Planning improvements', items: [
+      ['new', 'Upgrade sets follow purchasing rules, such as buying attack only until enemies are defeated in one hit.'],
+      ['new', 'The time between upgrade sets adjusts automatically.'],
+      ['new', 'The planner determines the fastest route through your prestiges.'] ] },
     { id: '2026-09-04-a', date: '2026-09-04', title: 'First release', items: [
       ['new', 'Plan what to buy with the currency you hold, with a Done button for each purchase.'],
-      ['new', 'The time left in the event is read from your device clock.'],
-      ['new', 'A recommended time for your next upgrade set and for when to prestige.'],
-      ['new', 'Your setup is saved in your browser automatically.'] ] }
+      ['new', 'The time remaining in the event is read from your device clock.'],
+      ['new', 'Recommended timing for your next upgrade set and for when to prestige.'],
+      ['new', 'Your setup is saved automatically in your browser.'] ] }
   ];
   function renderLog() {
     const kind = { new: ['new', 'New'], changed: ['changed', 'Changed'], fix: ['fix', 'Fixed'] };
@@ -2029,7 +2129,7 @@ const Engine = (function () {
   function exportCode() {
     const n = normalized();
     const iv = n.interval === 'auto' ? 0 : INTERVALS.indexOf(n.interval) + 1;
-    const bytes = [1, (S.useGems ? 1 : 0) | (n.ownedGems.x2 ? 2 : 0) | (Math.max(0, iv) << 2)];
+    const bytes = [1, (S.useGems ? 1 : 0) | (n.ownedGems.x2 ? 2 : 0) | (Math.max(0, iv) << 2) | (MINPROG.findIndex(m => m.key === n.minProg) << 5)];
     putVar(bytes, n.P); putVar(bytes, n.goal);
     putVar(bytes, n.ownedGems.hp); putVar(bytes, n.ownedGems.atk); putVar(bytes, n.ownedGems.speed);
     n.cur.forEach(c => putVar(bytes, Math.round(c)));
@@ -2053,7 +2153,7 @@ const Engine = (function () {
     const pos = { i: 0 };
     if (bytes[pos.i++] !== 1) throw new Error('version');
     const flags = bytes[pos.i++];
-    const o = { useGems: !!(flags & 1), x2: flags & 2 ? 1 : 0, iv: flags >> 2 };
+    const o = { useGems: !!(flags & 1), x2: flags & 2 ? 1 : 0, iv: (flags >> 2) & 7, mp: Math.min(flags >> 5, MINPROG.length - 1) };
     o.P = getVar(bytes, pos); o.goal = getVar(bytes, pos);
     o.hp = getVar(bytes, pos); o.atk = getVar(bytes, pos); o.speed = getVar(bytes, pos);
     o.cur = [0, 1, 2, 3].map(() => getVar(bytes, pos));
@@ -2069,6 +2169,7 @@ const Engine = (function () {
   function applyCode(o) {
     S.P = o.P; S.goal = Math.max(5, o.goal);
     S.interval = o.iv >= 1 && o.iv <= INTERVALS.length ? String(INTERVALS[o.iv - 1]) : 'auto';
+    S.minProg = MINPROG[o.mp].key;
     S.useGems = o.useGems; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
     S.cur = o.cur.slice(); S.lv = {}; E.UPG.forEach((up, i) => { S.lv[up.id] = o.lv[i]; });
     blankRowsAbove().forEach(w => { S.lv[w.id] = 1; });
@@ -2091,8 +2192,8 @@ const Engine = (function () {
   $('#cdImport').addEventListener('click', () => {
     const msg = $('#cdMsg');
     let o;
-    try { o = parseCode($('#cdIn').value); } catch (e) { msg.textContent = 'That code does not look right. Check that all of it was copied.'; return; }
-    if (!window.confirm('Replace your current setup with this code?')) return;
+    try { o = parseCode($('#cdIn').value); } catch (e) { msg.textContent = 'The code could not be read. Please check that the full code was copied.'; return; }
+    if (!window.confirm('Replace your current setup with the imported code?')) return;
     applyCode(o); dlg.close();
   });
 
