@@ -467,8 +467,11 @@ const Engine = (function () {
   }
 
   /* ---------- Combat + pace model ---------- */
-  let WALK = 6.28;
-  function setWalk(v) { WALK = v; } // movement/overhead seconds per fight at move speed 1 and event speed 1x (fitted to a real run)
+  let WALK = 6.28, WALK_Q = 0.131;
+  function setWalk(v) { WALK = v; } // movement/overhead seconds per fight at move speed 1 and event speed 1x (fitted to recorded runs)
+  // Recorded runs at event speed 2.9 to 3.5 fit a constant of 6.28. A run at event speed 7.85 fit 5.56, so above 3.1x the overhead
+  // shrinks slowly as event speed rises (all four recorded runs are reproduced to within about 1%).
+  function walkSec(st) { return st.ev > 3.1 ? WALK * Math.pow(st.ev / 3.1, -WALK_Q) : WALK; }
   function enemyAt(w, st) {
     const dmg = Math.max(1, Math.round(EDMG[w]) - st.edmg);
     const as = Math.max(0.01, EAS[w] - st.eas);
@@ -544,14 +547,15 @@ const Engine = (function () {
     const last = target - 1;
     let hp = st.hp, tsec = 0, pace = 0, died = false, x = 0, dieWave = 0, tDeath = 0;
     const avgP = playerAvgHit(st);
+    const wk = walkSec(st) / st.ms;      // walking overhead per fight, worked out once per build
     for (let w = 1; w <= last; w++) {
       if (died) { // only the pace term still needs hits; a cheap estimate is enough
         if (w > 260) break;
-        pace += 5 * (Math.max(1, Math.ceil(EHP[w] / avgP)) / st.as + WALK / st.ms) / st.ev;
+        pace += 5 * (Math.max(1, Math.ceil(EHP[w] / avgP)) / st.as + wk) / st.ev;
         continue;
       }
       const c = waveCore(st, w, ctx);
-      const tw = 5 * (c.hits / st.as + WALK / st.ms) / st.ev;
+      const tw = 5 * (c.hits / st.as + wk) / st.ev;
       pace += tw;
       if (!died) {
         if (hp <= c.wave) {
@@ -567,6 +571,41 @@ const Engine = (function () {
     r.J = r.x;
     if (lambda) r.J -= lambda * (Math.log(Math.max(pace, 1e-6)) - Math.log(1 + 4 * st.x5));
     return r;
+  }
+  // Range of outcomes for one build: N random runs using the same rules as evalBuild (random crits, random blocks, an enemy swing timer
+  // that carries across fights). Returns the waves at which the 10th, 50th and 90th percentile runs end. Seeded, so results are repeatable.
+  function runSpread(st, N, seed) {
+    N = N || 400;
+    let rs = (seed >>> 0) || 20261007;
+    const rnd = () => { rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0; return rs / 4294967296; };
+    const D = st.dmg, Dc = Math.round(st.dmg * st.cd), cP = Math.round(st.cc) / 100, blk = st.blk / 100;
+    const per = [];                                    // per-wave constants, built as needed
+    const wave = w => per[w] || (per[w] = {
+      hp: EHP[w], d: Math.max(1, Math.round(EDMG[w]) - st.edmg), cc: Math.min(1, Math.max(0, (ECC[w] - st.ecc) / 100)),
+      r: Math.max(0.01, EAS[w] - st.eas) / st.as, dc: 0 });
+    const xs = [];
+    for (let i = 0; i < N; i++) {
+      let hp = st.hp, carry = rnd(), x = null;
+      for (let w = 1; w < WMAX - 1 && x === null; w++) {
+        const e = wave(w);
+        if (!e.dc) e.dc = Math.round(e.d * Math.max(1, ECM[w] - st.ecd));
+        for (let k = 1; k <= 5 && x === null; k++) {
+          let hits = 1;
+          if (D < e.hp) { let dealt = 0; hits = 0; while (dealt < e.hp) { dealt += (rnd() < cP ? Dc : D); hits++; } }
+          carry += e.r * hits;
+          const sw = Math.floor(carry); carry -= sw;
+          for (let j = 0; j < sw; j++) {
+            if (rnd() < blk) continue;
+            hp -= rnd() < e.cc ? e.dc : e.d;
+            if (hp <= 0) { x = (w - 1) + (k - 0.5) / 5; break; }
+          }
+        }
+      }
+      xs.push(x === null ? WMAX : x);
+    }
+    xs.sort((a, b) => a - b);
+    const q = p => xs[Math.min(N - 1, Math.floor(p * N))];
+    return { p10: q(0.10), p50: q(0.50), p90: q(0.90), mean: xs.reduce((a, b) => a + b, 0) / N };
   }
   function incomePerRun(cleared, gems, st) {
     const m = (gems.x2 ? 2 : 1) * (1 + 4 * st.x5);
@@ -886,7 +925,7 @@ const Engine = (function () {
 
   return {
     UPG, BY_ID, BY_TIER, CAP_ID, CAPCAP_ID, COST, MIL, EHP, GEM_SETS,
-    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, incomePerRun, tierAtWave, pathFor, simulate, simulateGen
+    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, runSpread, incomePerRun, tierAtWave, pathFor, simulate, simulateGen
   };
 })();
 
@@ -1776,12 +1815,16 @@ const Engine = (function () {
     const stNext = E.computeStats(n.P, n.gems, lvAfter);
     const rNow = E.evalBuild(stNow, 1001, 0), rNext = E.evalBuild(stNext, 1001, 0);
     const runDur = h => { const s = Math.round(h * 3600), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return hh ? hh + 'h ' + mm + 'm' : mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's'; };
-    const rowsS = [['Theoretical max wave', rNow.x, rNext.x, wl], ['Average run length', rNow.runH, rNext.runH, runDur], ['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
+    // Range of outcomes: random runs vary because blocks and crits are random. Min and max are the 10th and 90th percentile runs.
+    const spNow = E.runSpread(stNow, 400), spNext = E.runSpread(stNext, 400);
+    const wlr = v => v >= 1000 ? 'W1000+' : wl(v);
+    const rowsS = [['Theoretical min wave', spNow.p10, spNext.p10, wlr], ['Theoretical max wave', spNow.p90, spNext.p90, wlr], ['Average run length', rNow.runH, rNext.runH, runDur], ['Max HP', stNow.hp, stNext.hp, fmt], ['Attack damage', stNow.dmg, stNext.dmg, fmt], ['Attack speed', stNow.as, stNext.as, f2],
       ['Move speed', stNow.ms, stNext.ms, f2], ['Event speed', stNow.ev, stNext.ev, v => f2(v) + 'x'], ['Crit chance', stNow.cc, stNext.cc, v => f2(v) + '%'],
       ['Crit damage', stNow.cd, stNext.cd, v => f2(v) + 'x'], ['Block chance', stNow.blk, stNext.blk, v => f2(v) + '%'],
       ['Prestige multiplier', stNow.mult, stNext.mult, v => f2(v) + 'x'], ['Enemy attack speed cut', stNow.eas, stNext.eas, v => '-' + f2(v)], ['Enemy damage cut', stNow.edmg, stNext.edmg, v => '-' + f2(v)]];
     let h = '<h3>Your stats</h3><div class="scroll"><table><tr><th>Stat</th><th>Now</th><th>After buying</th></tr>' +
-      rowsS.map(s => '<tr><td>' + s[0] + '</td><td>' + s[3](s[1]) + '</td><td>' + s[3](s[2]) + '</td></tr>').join('') + '</table></div>';
+      rowsS.map(s => '<tr><td>' + s[0] + '</td><td>' + s[3](s[1]) + '</td><td>' + s[3](s[2]) + '</td></tr>').join('') + '</table></div>' +
+      '<p class="note">Min and max wave show where about 80% of runs end. Runs vary because blocks and critical hits are random. The planner\'s estimates use the average, which sits between the two.</p>';
     const bw = E.MIL.map(m => m[0]).concat([200, 250, n.goal]).filter((w, i, a) => a.indexOf(w) === i && w <= 1000).sort((a, b) => a - b);
     h += '<h3 style="margin-top:14px">One-hit damage needed</h3><div class="scroll"><table><tr><th>Wave</th><th>Enemy HP</th><th>Your damage</th><th>Status</th></tr>';
     bw.forEach(w => {
@@ -1961,6 +2004,9 @@ const Engine = (function () {
      Item kinds: 'new' (something you can now do), 'changed' (something works differently or better), 'fix' (a problem that is now solved).
      Note: blocks dated Sep 26 and earlier carry illustrative dates spread over a month. Real dates start with the Oct 3 block. */
   const CHANGELOG = [
+    { id: '2026-10-07-2', date: '2026-10-07', title: 'Updates', items: [
+      ['new', 'Theoretical min wave in Stats. Min and max wave now show the range in which about 80% of runs end, since blocks and critical hits are random.'],
+      ['changed', 'Run-time estimates were recalibrated using recorded runs at higher move and event speeds. Average run length, income projections and upgrade set timing are now more accurate for later-stage builds.'] ] },
     { id: '2026-10-06-1', date: '2026-10-06', title: 'Updates', items: [
       ['new', 'Order menu for upgrade sets. "Most impactful first" lists Cap of Cap Upgrades at the top when needed, then each tier in turn with its cap upgrade first, followed by that tier\'s upgrades from most to least impactful. "Tier order" follows each tier\'s own list.'],
       ['new', 'Minimum progress per visit setting in Event Settings, used with Auto timing. Auto recommends a visit once the next upgrade set raises the theoretical max wave by at least 1 wave. Other options: any gain, at least 2 waves, at least 3% and at least 5%.'] ] },
