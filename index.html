@@ -292,6 +292,15 @@ ul.log li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; fon
   table { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* gem upgrades and prestige path */
+.gembuy { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface2); }
+.gembuy h3 { margin: 0; font-size: 15px; }
+.tag.tg { color: var(--ink); background: var(--surface); border: 1px solid var(--line); }
+.gemdone { min-width: 72px; font-weight: 600; }
+.gemstop { margin: 0 0 10px; }
+.pathlab { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.warnlab { border-left: 4px solid var(--warn); padding-left: 10px; }
+.pathtbl th, .pathtbl td { text-align: left; padding: 6px 8px 6px 0; vertical-align: top; }
 </style>
 </head>
 <body>
@@ -797,7 +806,9 @@ const Engine = (function () {
   // o: { P, gems, lv, cur, remainH, goal, intervalH, lambda }
   function* simulateGen(o) {   // yields every few visits so a page can stay responsive; simulate() below runs it to the end
     let P = o.P;
-    const gems = o.gems, goal = o.goal, remainH = o.remainH, lambda = o.lambda;
+    let gems = o.gems;
+    const goal = o.goal, remainH = o.remainH, lambda = o.lambda;
+    const gemFor = o.gemFor || null;           // gems held at a prestige tier (the player tops them up after each prestige)
     const adaptG = o.adaptG || 0;               // adaptive check-ins: target J gain per check-in
     const GAPS = [0.25, 0.5, 1, 2, 4, 8];
     const snapGap = (x) => { let best = GAPS[0], bd = Infinity; for (const g of GAPS) { const d = Math.abs(Math.log(g / Math.max(x, 1e-6))); if (d < bd) { bd = d; best = g; } } return best; };
@@ -823,7 +834,7 @@ const Engine = (function () {
       const prof = evalBuild(st, target, 0);
       if (prof.wave > maxWave) maxWave = prof.wave;
       const full = prof.capable ? evalBuild(st, Math.max(251, goal + 1), 0) : prof;
-      const ev = { type: 'checkin', t, P, target, tier: pi < path.length ? path[pi][1] : null, before, buys, wave: prof.wave, cleared: full.cleared, x: full.x,
+      const ev = { type: 'checkin', t, P, gems, target, tier: pi < path.length ? path[pi][1] : null, before, buys, wave: prof.wave, cleared: full.cleared, x: full.x,
         capable: prof.capable, tTarget: prof.capable ? prof.tTarget : null, runMin: prof.runH * 60, hp: st.hp, dmg: st.dmg };
       if (o.debug) ev.lv = Object.assign({}, lv);
       events.push(ev);
@@ -840,8 +851,10 @@ const Engine = (function () {
         }
         if (tReady > remainH) break;
         const to = path[pi][1];
-        events.push({ type: 'prestige', t: tReady, from: P, to, wave: target, stats: st });
+        const pev = { type: 'prestige', t: tReady, from: P, to, wave: target, stats: st };
+        events.push(pev);
         P = to; pi++;
+        if (gemFor) { const g2 = gemFor(to, gems); if (gemKey(g2) !== gemKey(gems)) { pev.gemBuy = { from: gems, to: g2 }; gems = g2; } }
         UPG.forEach(u => { lv[u.id] = 0; });
         cur = [0, 0, 0, 0]; waiting = [0, 0, 0, 0, 0]; prev = null; t = tReady;
         justPrestiged = true; lastCheckT = null; phaseStartT = tReady;
@@ -923,9 +936,230 @@ const Engine = (function () {
   }
   function simulate(o) { const g = simulateGen(o); let r = g.next(); while (!r.done) r = g.next(); return r.value; }
 
+  /* ---------- Route search: prestige at any wave (no fixed milestones) ---------- */
+  // Waves with an in-game reward. When a goal cannot be reached in time the plan aims for the highest of these that can be.
+  const REWARD_WAVES = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 115, 130, 150, 200, 250];
+  const tierOfWave = w => Math.max(0, Math.round(w / 5) - 1);
+  const waveOfTier = b => 5 * (b + 1);
+  const gemKey = g => g.atk + '/' + g.hp + '/' + g.speed + '/' + (g.x2 ? 1 : 0);
+  const gemMaxOf = (a, b) => ({ atk: Math.max(a.atk, b.atk), hp: Math.max(a.hp, b.hp), speed: Math.max(a.speed, b.speed), x2: Math.max(a.x2 ? 1 : 0, b.x2 ? 1 : 0) });
+  const gemMinOf = (a, b) => ({ atk: Math.min(a.atk, b.atk), hp: Math.min(a.hp, b.hp), speed: Math.min(a.speed, b.speed), x2: Math.min(a.x2 ? 1 : 0, b.x2 ? 1 : 0) });
+  const NO_GEMS = { atk: 0, hp: 0, speed: 0, x2: 0 };
+  // The gems held at prestige tier `tier` when aiming for the set G: whatever is owned, topped up to G as far as that tier allows.
+  function gemsFor(tier, owned, G) { return gemMaxOf(owned, gemMinOf(G, gemMax(tier))); }
+  function polOpts(pol) {
+    const o = { lambda: pol.lambda };
+    if (pol.intervalH) o.intervalH = pol.intervalH; else o.adaptG = pol.G;
+    if (pol.minWaves) o.minWaves = pol.minWaves;
+    if (pol.minProgress) o.minProgress = pol.minProgress;
+    return o;
+  }
+  const polKeyOf = pol => (pol.intervalH ? 'i' + pol.intervalH : 'g' + pol.G) + '|' + pol.lambda + '|' + (pol.minWaves || 0) + '|' + (pol.minProgress || 0);
+  function newRouteCache() { return new Map(); }
+  const ROUTE_H = 744;      // longest event, in hours
+  // Hours for a fresh start at tier a (no upgrades, only gems g) until the build can clear wave w
+  function freshHours(cache, pol, a, w, g) {
+    const key = a + '|' + w + '|' + gemKey(g) + '|' + polKeyOf(pol);
+    let v = cache.get(key);
+    if (v === undefined) {
+      const r = simulate(Object.assign({ P: a, gems: g, lv: {}, cur: [0, 0, 0, 0], remainH: ROUTE_H, goal: w, path: [] }, polOpts(pol)));
+      v = r.attainable ? r.completionH : Infinity;
+      cache.set(key, v);
+    }
+    return v;
+  }
+  // Hours from the player's own state to wave w, with the gems they would hold (remembered for the length of one planning run)
+  function stateHours(o, w, g) {
+    const key = w + '|' + gemKey(g) + '|' + polKeyOf(o.pol);
+    if (o.stateMemo && o.stateMemo.has(key)) return o.stateMemo.get(key);
+    const r = simulate(Object.assign({ P: o.P, gems: g, lv: o.lv, cur: o.cur, remainH: ROUTE_H, goal: w, path: [], prevGapH: o.prevGapH }, polOpts(o.pol)));
+    const v = r.attainable ? r.completionH : Infinity;
+    if (o.stateMemo) o.stateMemo.set(key, v);
+    return v;
+  }
+  function routeNodes(P, target, kind, around) {
+    const out = new Set();
+    [10, 15, 20, 30, 40, 55].forEach(w => out.add(w));       // early prestiges are cheap and close together; the fine pass tries the waves around them
+    if (kind === 'probe') for (let w = 85; w <= 235; w += 25) out.add(w);
+    else for (let w = 75; w <= 240; w += 15) out.add(w);
+    if (around) around.forEach(w => { [w - 5, w, w + 5].forEach(x => { if (x >= 10 && x <= 245) out.add(x); }); });
+    return Array.from(out).filter(w => tierOfWave(w) > P && w < target).sort((a, b) => a - b);
+  }
+  const MIN_STEP = 1.2, MAX_STEP = 3.3;     // the next prestige wave is between these multiples of the last one
+  // Best route from the player's state to `target` over the given prestige waves. o: { P, lv, cur, owned, G, skip, pol, cache, prevGapH, stick }
+  function* searchNodes(o, nodes, target) {
+    const cache = o.cache, pol = o.pol;
+    const gemsAt = tier => (tier === o.P && o.skip) ? o.owned : gemsFor(tier, o.owned, o.G);
+    const suf = new Map();            // tier -> { t, next }
+    let finalOpen = true;             // a higher tier never does worse from a fresh start, so once a tier cannot finish the lower ones cannot either
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const startWave = nodes[i];
+      const a = tierOfWave(startWave);
+      if (suf.has(a)) continue;
+      const g = gemsAt(a);
+      let best = Infinity, next = null;
+      if (finalOpen) {
+        best = freshHours(cache, pol, a, target, g);
+        yield;
+        if (!isFinite(best)) finalOpen = false;
+      }
+      for (let j = i + 1; j < nodes.length; j++) {
+        const w2 = nodes[j];
+        if (w2 < startWave * MIN_STEP) continue;
+        if (w2 > startWave * MAX_STEP) break;
+        const s2 = suf.get(tierOfWave(w2));
+        if (!s2 || !isFinite(s2.t)) continue;      // that prestige leads nowhere
+        const e = freshHours(cache, pol, a, w2, g);
+        yield;
+        if (!isFinite(e) || e >= best) break;
+        if (e + s2.t < best) { best = e + s2.t; next = w2; }
+      }
+      suf.set(a, { t: best, next });
+    }
+    // first prestige from the player's own state (or push straight to the goal)
+    const g0 = gemsAt(o.P);
+    let bestTotal = stateHours(o, target, g0), firstW = null;
+    const options = [];
+    yield;
+    for (const w of nodes) {
+      const s = suf.get(tierOfWave(w)); if (!s || !isFinite(s.t)) continue;
+      const t1 = stateHours(o, w, g0);
+      yield;
+      if (!isFinite(t1)) continue;
+      options.push({ w, total: t1 + s.t });
+      if (t1 + s.t < bestTotal) { bestTotal = t1 + s.t; firstW = w; }
+    }
+    // keep the previous next-prestige wave unless another is clearly (1%) faster, so the advice does not wander between near ties
+    if (o.stick && firstW !== o.stick) {
+      const prev = options.find(x => x.w === o.stick);
+      if (prev && prev.total <= bestTotal * 1.01) { firstW = o.stick; bestTotal = prev.total; }
+    }
+    const path = [];
+    let w = firstW;
+    while (w != null) { path.push([w, tierOfWave(w)]); w = suf.get(tierOfWave(w)).next; }
+    return { path, total: bestTotal };
+  }
+  // kind 'probe': one quick pass over a sparse set of waves (to compare gem sets); 'full': a coarse pass, then up to two finer passes around the waves it picked
+  function* searchRoute(o, target, kind) {
+    if (kind === 'probe') return yield* searchNodes(o, routeNodes(o.P, target, 'probe', null), target);
+    let best = yield* searchNodes(o, routeNodes(o.P, target, 'coarse', null), target);
+    for (let pass = 0; pass < 2 && isFinite(best.total) && best.path.length; pass++) {
+      const f = yield* searchNodes(o, routeNodes(o.P, target, 'fine', best.path.map(m => m[0])), target);
+      const same = JSON.stringify(f.path) === JSON.stringify(best.path);
+      if (f.total < best.total) best = f;
+      if (same) break;
+    }
+    return best;
+  }
+  // Total hours for a fixed list of prestige waves
+  function* pathHours(o, path, target) {
+    const gemsAt = tier => (tier === o.P && o.skip) ? o.owned : gemsFor(tier, o.owned, o.G);
+    let total = 0;
+    let t = stateHours(o, path.length ? path[0][0] : target, gemsAt(o.P)); yield;
+    if (!isFinite(t)) return Infinity;
+    total += t;
+    for (let k = 0; k < path.length; k++) {
+      const a = path[k][1], next = k + 1 < path.length ? path[k + 1][0] : target;
+      const e = freshHours(o.cache, o.pol, a, next, gemsAt(a)); yield;
+      if (!isFinite(e)) return Infinity;
+      total += e;
+    }
+    return total;
+  }
+
+  // Cumulative gem sets from what is owned up to the most the route's highest tier allows, in the order they pay off:
+  // 2x currency, Event Speed, then Max HP with Attack Damage following at about a third of the HP level.
+  function gemRungs(owned, mx) {
+    const g = Object.assign({}, owned), out = [];
+    const bump = (k, to) => { const t = Math.min(to, mx[k]); if (g[k] < t) { g[k] = t; out.push(Object.assign({}, g)); } };
+    bump('x2', 1); bump('speed', 1); bump('hp', 3); bump('speed', 2); bump('hp', 6); bump('speed', 3);
+    for (let h = 9; h < mx.hp + 3; h += 3) { bump('hp', h); if (h >= 12) bump('atk', Math.floor(h / 9) * 3); }
+    for (let a = 3; a < mx.atk + 3; a += 3) bump('atk', a);
+    return out;
+  }
+  const GEM_STOP = 0.02;            // Fastest Completion stops once ten more levels of HP would shorten the whole plan by less than this (and by less than half an hour)
+  // Plan the prestige route. o: { P, lv, cur, owned, mode: 'none' | 'min' | 'fast', skip, goal, remainH, pol, cache, prevGapH, stick, slack }
+  function* planRoute(o) {
+    const mode = o.mode, owned = mode === 'none' ? NO_GEMS : o.owned, slack = o.slack || 0.9;
+    const base = { P: o.P, lv: o.lv, cur: o.cur, owned, skip: !!o.skip, pol: o.pol, cache: o.cache, prevGapH: o.prevGapH, stick: null, stateMemo: new Map() };
+    const probe = (G, target) => searchRoute(Object.assign({}, base, { G }), target, 'probe');
+    const full = (G, target) => searchRoute(Object.assign({}, base, { G, stick: o.stick || null }), target, 'full');
+    const Gtop = mode === 'none' ? NO_GEMS : { atk: 1000, hp: 1000, speed: 3, x2: 1 };    // everything the tiers allow
+    // 1. can the goal be reached at all (with the most gems the player could buy)?
+    let target = o.goal, state = 'fastest';
+    let pTop = yield* probe(Gtop, target);
+    if (!(pTop.total <= o.remainH) && pTop.total <= o.remainH * 1.06) { const f = yield* full(Gtop, target); if (f.total < pTop.total) pTop = f; }
+    if (!(pTop.total <= o.remainH)) {
+      // 2. no: aim for the highest reward wave that can be reached in time
+      const list = REWARD_WAVES.filter(w => w < o.goal);
+      let lo = -1, hi = list.length - 1, best = null;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        const r = yield* probe(Gtop, list[mid]);
+        if (r.total <= o.remainH) { lo = mid; best = r; } else hi = mid - 1;
+      }
+      state = 'highest';
+      target = lo >= 0 ? list[lo] : list[0];
+      pTop = best || (yield* probe(Gtop, target));
+    }
+    let G = mode === 'none' ? NO_GEMS : owned, gemNote = null;
+    if (mode !== 'none') {
+      const topTier = Math.max(o.P, ...pTop.path.map(m => m[1]));
+      const rungs = gemRungs(owned, gemMax(topTier));
+      const memo = new Map();
+      const T = function* (k) {       // k = -1 means "buy nothing more"
+        if (!memo.has(k)) memo.set(k, (yield* probe(k < 0 ? owned : rungs[k], target)).total);
+        return memo.get(k);
+      };
+      if (mode === 'min') {
+        const limit = state === 'fastest' ? o.remainH * slack : o.remainH;
+        let k = -1;
+        if (!((yield* T(-1)) <= limit)) {
+          let lo = 0, hi = rungs.length - 1;
+          memo.set(hi, pTop.total);                       // the most gems the tiers allow is what the first probe already measured
+          if (!rungs.length || !(pTop.total <= limit)) { k = rungs.length - 1; gemNote = 'short'; }
+          else {
+            while (lo < hi) { const mid = (lo + hi) >> 1; if ((yield* T(mid)) <= limit) hi = mid; else lo = mid + 1; }
+            k = lo;
+          }
+        }
+        G = k < 0 ? owned : rungs[k];
+      } else {
+        // fast: buy as much as the tiers allow, but stop once ten more levels of HP no longer pay for themselves
+        const idxAt = n => { const i = rungs.findIndex(x => x.hp >= n); return i < 0 ? rungs.length - 1 : i; };
+        const last = rungs.length - 1;
+        let k = last;
+        if (last >= 0) {
+          memo.set(last, pTop.total);
+          const worth = function* (i) {            // do the next ten HP levels after rung i shorten the plan enough?
+            const j = idxAt(rungs[i].hp + 10);
+            if (j <= i) return false;
+            const a = yield* T(i), b2 = yield* T(j);
+            return !isFinite(a) ? isFinite(b2) : (a - b2 >= Math.max(GEM_STOP * a, 0.5));      // at least 2% of the plan and half an hour
+          };
+          if (rungs[last].hp - owned.hp >= 10 && !(yield* worth(idxAt(rungs[last].hp - 10)))) {
+            // gains have flattened somewhere below the top: find where, assuming each step gains less than the one before
+            let lo = -1, hi = last;                // smallest rung from which more gems are no longer worth it
+            while (lo < hi - 1) {
+              const mid = (lo + hi) >> 1;
+              if (mid >= 0 && (yield* worth(mid))) lo = mid; else hi = mid;
+            }
+            k = hi >= 0 && hi <= last ? hi : -1;
+            gemNote = 'stopped';
+            if (k > 0 && !(yield* worth(k - 1))) k = k - 1;
+          } else if (!(rungs[last].hp - owned.hp >= 10)) k = last;
+        }
+        G = k < 0 ? owned : rungs[k];
+      }
+    }
+    let route = yield* full(G, target);
+    return { goalEff: target, state, mode, G, owned, path: route.path, total: route.total, gemNote, reachable: route.total <= o.remainH };
+  }
+
   return {
     UPG, BY_ID, BY_TIER, CAP_ID, CAPCAP_ID, COST, MIL, EHP, GEM_SETS,
-    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, runSpread, incomePerRun, tierAtWave, pathFor, simulate, simulateGen
+    setModel, setWalk, setRules, setHpReq, nextCost, maxLevel, gemCost, gemMax, computeStats, enemyAt, evalBuild, runSpread, incomePerRun, tierAtWave, pathFor, simulate, simulateGen,
+    REWARD_WAVES, tierOfWave, waveOfTier, gemKey, gemsFor, gemMaxOf, gemMinOf, NO_GEMS, newRouteCache, freshHours, stateHours, searchRoute, searchNodes, pathHours, planRoute, gemRungs
   };
 })();
 
@@ -939,13 +1173,27 @@ const Engine = (function () {
   const TIER_NAME = ['', 'T1', 'T2', 'T3', 'T4'];
   const INTERVALS = [0.25, 0.5, 1, 2, 4, 8];
   const ADAPT_G = [0.7, 2, 5, 12];
-  // Alternative end-game prestige routes. The standard route (E.MIL) is the fallback.
-  const ALT_PATHS = [
-    { name: 'P39 at W200', path: [[10, 1], [15, 2], [20, 3], [30, 5], [55, 10], [105, 20], [200, 39]] },
-    { name: 'P40 at W205', path: [[10, 1], [15, 2], [20, 3], [30, 5], [55, 10], [105, 20], [205, 40]] },
-    { name: 'P25 at W130, P39 at W200', path: [[10, 1], [15, 2], [20, 3], [30, 5], [55, 10], [105, 20], [130, 25], [200, 39]] },
-    { name: 'P31 at W160, P43 at W220', path: [[10, 1], [15, 2], [20, 3], [30, 5], [55, 10], [105, 20], [160, 31], [220, 43]] }
+  // Gem upgrade preference (Event Settings)
+  const GEM_PREFS = [
+    { key: 'none', label: 'None', note: 'Gems are ignored. The plan and the prestige path assume no gem upgrades, and the Gems section is hidden.' },
+    { key: 'min', label: 'Recommended Minimum', note: 'Suggests the fewest gem upgrades that still reach your goal with time to spare. If more are needed, they are listed again after a prestige, when the limits rise.' },
+    { key: 'fast', label: 'Fastest Completion', note: 'Suggests the most gem upgrades you can buy, for as long as each batch shortens the plan enough to be worth it. More are listed after each prestige as the limits rise.' }
   ];
+  const gemPrefOf = k => GEM_PREFS.find(g => g.key === k) || GEM_PREFS[1];
+  // Prestige route work is remembered between visits, so only the first calculation is slow.
+  const ROUTE_STORE = 'evcalc.route1', ROUTE_V = 'r1';
+  const ROUTE_CACHE = E.newRouteCache();
+  try {
+    const rawRc = localStorage.getItem(ROUTE_STORE);
+    if (rawRc) { const o = JSON.parse(rawRc); if (o && o.v === ROUTE_V && Array.isArray(o.e)) o.e.forEach(kv => ROUTE_CACHE.set(kv[0], kv[1] === null ? Infinity : kv[1])); }
+  } catch (e) { /* storage unavailable */ }
+  function saveRouteCache() {
+    try {
+      const arr = []; ROUTE_CACHE.forEach((v, k) => arr.push([k, isFinite(v) ? Math.round(v * 1000) / 1000 : null]));
+      if (arr.length > 6000) arr.splice(0, arr.length - 6000);
+      localStorage.setItem(ROUTE_STORE, JSON.stringify({ v: ROUTE_V, e: arr }));
+    } catch (e) { /* ignore */ }
+  }
   const LAMBDAS = [10, 30];
   // Minimum progress per visit (Auto timing only). A visit is only recommended once the next set lifts the theoretical max wave by at least this much.
   const MINPROG = [
@@ -960,19 +1208,20 @@ const Engine = (function () {
   const STD_SET = { hp: 3, atk: 0, speed: 1, x2: 1 };
 
   function defaults() {
-    return { P: 0, useGems: false, gems: { atk: 0, hp: 0, speed: 0, x2: 0 }, cur: [0, 0, 0, 0], lv: {},
+    return { P: 0, gemPref: 'min', gems: { atk: 0, hp: 0, speed: 0, x2: 0 }, cur: [0, 0, 0, 0], lv: {},
       manual: false, days: 0, hours: 0, mins: 0, goal: 250, interval: 'auto', minProg: 'auto', lastCheckin: null, ui: {} };
   }
   let S = defaults();
   let hadSaved = false;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) { hadSaved = true; const o = JSON.parse(raw); S = Object.assign(defaults(), o); S.gems = Object.assign(defaults().gems, o.gems || {}); }
+    if (raw) { hadSaved = true; const o = JSON.parse(raw); S = Object.assign(defaults(), o); S.gems = Object.assign(defaults().gems, o.gems || {}); if (!GEM_PREFS.some(g => g.key === o.gemPref)) S.gemPref = o.useGems ? 'min' : 'none'; }   // earlier saves had a Use gems box
   } catch (e) { /* storage unavailable */ }
   S.ui = S.ui || {};
   S.curAt = S.curAt || S.lastCheckin || Date.now();
   if (S.ui.setupDone === undefined) S.ui.setupDone = hadSaved;   // people with saved data are already set up
   if (S.ui.tab === undefined) S.ui.tab = hadSaved ? 'plan' : 'setup'; // first visit on a phone starts on Setup
+  const usesGems = () => S.gemPref !== 'none';
   function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
   function isOpen(k, def) { return S.ui[k] === undefined ? def : !!S.ui[k]; }
   // collapsible panel; its open/closed state is remembered
@@ -1062,6 +1311,8 @@ const Engine = (function () {
     order.forEach(u => { lv[u.id] = clamp(raw[u.id], 0, E.maxLevel(u, lv)); });
     return lv;
   }
+  // "Continue without gem upgrades" lasts for one prestige tier of one event
+  function gemSkipOn(P) { const g = S.ui.gemSkip; return !!(g && g.P === P && g.ev === eventWindow(Date.now()).start); }
   function normalized() {
     const P = clamp(Math.round(num(S.P, 0)), 0, 100000);
     const gm = E.gemMax(P);
@@ -1069,12 +1320,12 @@ const Engine = (function () {
       atk: clamp(Math.round(num(S.gems.atk, 0)), 0, gm.atk), hp: clamp(Math.round(num(S.gems.hp, 0)), 0, gm.hp),
       speed: clamp(Math.round(num(S.gems.speed, 0)), 0, gm.speed), x2: clamp(Math.round(num(S.gems.x2, 0)), 0, 1)
     };
-    const gems = S.useGems ? ownedGems : { atk: 0, hp: 0, speed: 0, x2: 0 };
+    const gems = usesGems() ? ownedGems : { atk: 0, hp: 0, speed: 0, x2: 0 };
     const lv = clampLevels(P, S.lv);
     const es = eventState();
     return { P, gems, ownedGems, lv, cur: S.cur.map(v => Math.max(0, num(v, 0))), remainH: clamp(es.remainH, 0.25, 24 * 120), T0: es.T0,
       goal: clamp(Math.round(num(S.goal, 250)), 5, 1000), interval: S.interval === 'auto' ? 'auto' : num(S.interval, 1), minProg: minProgOf(S.minProg).key,
-      gm,
+      gm, gemPref: S.gemPref, gemSkip: gemSkipOn(P),
       prevGapH: S.lastCheckin ? clamp((es.now - S.lastCheckin) / 3600000, 0.05, 48) : null };
   }
 
@@ -1092,6 +1343,8 @@ const Engine = (function () {
     h += '<p class="note" id="ivDesc">' + lastIvDesc + '</p>';
     h += '<div class="field"><label for="in_minprog">Minimum progress per visit</label><select id="in_minprog">' + MINPROG.map(m => '<option value="' + m.key + '">' + m.label + '</option>').join('') + '</select></div>';
     h += '<p class="note" id="mpDesc"></p>';
+    h += '<div class="field"><label for="in_gempref">Gem upgrades</label><select id="in_gempref">' + GEM_PREFS.map(g => '<option value="' + g.key + '">' + g.label + '</option>').join('') + '</select></div>';
+    h += '<p class="note" id="gpDesc"></p>';
     h += '<label class="chk"><input type="checkbox" id="in_manual"' + (S.manual ? ' checked' : '') + '> Set the time left manually</label>';
     h += '<div id="manualTime"' + (S.manual ? '' : ' hidden') + '><div class="field"><label>Time left</label><div class="timefield">' +
       '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_days" value="' + S.days + '"><span>d</span>' +
@@ -1104,9 +1357,8 @@ const Engine = (function () {
     for (let t = 1; t <= 4; t++) h += '<label class="cur t' + t + '" for="in_cur' + t + '"><span class="tag t' + t + '">T' + t + '</span><input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_cur' + t + '" value="' + Math.round(S.cur[t - 1]) + '" aria-label="Tier ' + t + ' currency"></label>';
     h += '</div></section>';
     // 3. Gems
-    h += '<section class="panel" id="gemsPanel"><details data-k="gems"' + (isOpen('gems', true) ? ' open' : '') + '><summary><span class="stepno">3</span>Gems</summary><p class="note" id="gemNote">Gems are optional.</p>';
-    h += '<label class="chk"><input type="checkbox" id="in_usegems"' + (S.useGems ? ' checked' : '') + '> Use gems</label>';
-    h += '<div id="gemFields"' + (S.useGems ? '' : ' hidden') + '>';
+    h += '<section class="panel" id="gemsPanel"' + (usesGems() ? '' : ' hidden') + '><details data-k="gems"' + (isOpen('gems', true) ? ' open' : '') + '><summary><span class="stepno">3</span>Gems</summary><p class="note" id="gemNote">Enter the gem levels you own. The Rec. column is what the planner suggests.</p>';
+    h += '<div id="gemFields">';
     h += '<div class="colhead g"><span>Gem upgrade</span><span>Rec.</span><span>Level</span><span>Max</span></div>';
     const gemRow = (key, label, input) => '<div class="grow"><div class="nm">' + label + '</div><span class="rc" id="rec_' + key + '">-</span>' + input + '<span class="mx" id="max_' + key + '"></span></div>';
     h += gemRow('hp', 'Max HP <i>+10% each</i>', '<input class="int" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" id="in_ghp" value="' + S.gems.hp + '" aria-label="Max HP gem level">');
@@ -1130,6 +1382,7 @@ const Engine = (function () {
     $('#inputs').innerHTML = h;
     $('#in_interval').value = String(S.interval);
     $('#in_minprog').value = minProgOf(S.minProg).key; syncMinProg();
+    $('#in_gempref').value = S.gemPref; syncGemPref();
     wire();
     refreshRows();
     renderEventInfo();
@@ -1207,10 +1460,10 @@ const Engine = (function () {
   let dirtyTimer = null, dirty = false;
   function markDirty() { dirty = true; clearTimeout(dirtyTimer); dirtyTimer = setTimeout(() => { if (dirty) $('#updateBar').classList.add('show'); }, 4000); }
   function clearDirty() { dirty = false; clearTimeout(dirtyTimer); $('#updateBar').classList.remove('show'); }
-  // While you type, the plan waits for a short pause. Leaving the field (or pressing Enter) updates it straight away.
-  function schedule(ms) { if (!S.ui.setupDone) return; markDirty(); clearTimeout(timer); timer = setTimeout(compute, ms == null ? 900 : ms); }
-  document.addEventListener('focusout', e => { if (isInt(e.target) && dirty && S.ui.setupDone) { clearTimeout(timer); timer = setTimeout(compute, 60); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Enter' && isInt(e.target)) e.target.blur(); });
+  // After a manual edit the plan waits 10 seconds (in case more fields are being changed). The Update plan button applies it sooner.
+  const EDIT_DELAY = 10000;
+  function schedule(ms) { if (!S.ui.setupDone) return; markDirty(); clearTimeout(timer); timer = setTimeout(compute, ms == null ? EDIT_DELAY : ms); }
+    document.addEventListener('keydown', e => { if (e.key === 'Enter' && isInt(e.target)) e.target.blur(); });
   function bindNum(id, setter, hardMax) {
     const el = $('#' + id);
     if (hardMax != null) el.max = hardMax;
@@ -1317,6 +1570,10 @@ const Engine = (function () {
       message: (v, cleared, before, aff) => (cleared ? 'The prestige tier field was cleared. This sets it to P0 (previously P' + before + ')' : 'Changing the prestige tier from P' + before + ' to P' + v) + ' locks some upgrades and lowers the gem limits. These will be reduced: ' + lossList(aff) + '.\n\nKeep this value?'
     });
   }
+  function syncGemPref() {
+    const d = $('#gpDesc'); if (d) d.textContent = gemPrefOf(S.gemPref).note;
+    const p = $('#gemsPanel'); if (p) p.hidden = !usesGems();
+  }
   function syncMinProg() {
     const sel = $('#in_minprog'), d = $('#mpDesc'); if (!sel) return;
     const auto = S.interval === 'auto';
@@ -1337,8 +1594,8 @@ const Engine = (function () {
     $('#in_interval').addEventListener('change', e => { S.interval = e.target.value; save(); syncMinProg(); compute(); });
     $('#in_minprog').addEventListener('change', e => { S.minProg = e.target.value; save(); syncMinProg(); compute(); });
     $('#in_gx2').addEventListener('change', e => { S.gems.x2 = e.target.checked ? 1 : 0; save(); schedule(); });
-    $('#in_usegems').addEventListener('change', e => {
-      S.useGems = e.target.checked; $('#gemFields').hidden = !S.useGems; save(); compute();
+    $('#in_gempref').addEventListener('change', e => {
+      S.gemPref = e.target.value; S.ui.gemSkip = null; save(); syncGemPref(); lastGemInfo = null; compute();
     });
     $('#in_manual').addEventListener('change', e => {
       S.manual = e.target.checked;
@@ -1353,7 +1610,7 @@ const Engine = (function () {
   }
   $('#btnReset').addEventListener('click', () => {
     if (!window.confirm('Reset all inputs to their defaults?')) return;
-    const keep = S.ui; S = defaults(); S.ui = keep; S.ui.setupDone = false; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
+    const keep = S.ui; S = defaults(); S.ui = keep; S.ui.setupDone = false; S.ui.nextW = null; S.ui.lastRoute = null; S.ui.gemSkip = null; OV = [null, null, null, null]; save(); lastGemInfo = null; buildInputs(); compute();
   });
   // Plan / Setup tabs (phones and narrow windows only; wide screens show both)
   function setTab(t) {
@@ -1375,12 +1632,82 @@ const Engine = (function () {
   // policy: a number (fixed interval in hours) or { G } (adaptive: target gain per visit)
   function simOpts(n, policy, lambda, remainH, path, extra) {
     const o = Object.assign({ P: n.P, gems: n.gems, lv: n.lv, cur: n.cur, remainH: remainH || n.remainH, goal: n.goal, lambda, prevGapH: n.prevGapH }, extra || {});
-    if (path) o.path = path;
+    if (n.gemFor) o.gemFor = n.gemFor;
+    o.path = path || n.path || [];
     if (typeof policy === 'number') o.intervalH = policy; else o.adaptG = policy.G;
     return o;
   }
   function sim(n, policy, lambda, remainH, path, extra) { return E.simulate(simOpts(n, policy, lambda, remainH, path, extra)); }
-  function* pipeline(n) {
+  // Prestige path: any wave may be a prestige wave. The search uses the same timing rule as the plan (Auto or a fixed interval).
+  function* routeSearch(n0) {
+    const pol = n0.interval === 'auto' ? { G: 3, lambda: 20 } : { intervalH: n0.interval, lambda: 20 };
+    const owned = usesGems() ? n0.ownedGems : { atk: 0, hp: 0, speed: 0, x2: 0 };
+    const gen = E.planRoute({ P: n0.P, lv: n0.lv, cur: n0.cur, owned, mode: n0.gemPref, skip: n0.gemSkip, goal: n0.goal, remainH: n0.remainH, pol, cache: ROUTE_CACHE, prevGapH: n0.prevGapH, stick: S.ui.nextW && S.ui.nextW.P === n0.P ? S.ui.nextW.w : null });
+    let r = gen.next();
+    while (!r.done) { yield 'route'; r = gen.next(); }
+    saveRouteCache();
+    return r.value;
+  }
+  // Tries the prestige waves around `path` (the first two prestiges on a grid, later ones one at a time) with the plan's exact
+  // timing settings. Returns the fastest { path, r }. The current next-prestige wave is kept unless another is clearly (1%) faster.
+  const REFINE_KEY = 'evcalc.refine1';
+  let REFINE_CACHE = {};
+  try { REFINE_CACHE = JSON.parse(localStorage.getItem(REFINE_KEY) || '{}') || {}; } catch (e) { REFINE_CACHE = {}; }
+  function saveRefine(k, v) {
+    REFINE_CACHE[k] = v;
+    const ks = Object.keys(REFINE_CACHE); if (ks.length > 40) ks.slice(0, ks.length - 40).forEach(x => delete REFINE_CACHE[x]);
+    try { localStorage.setItem(REFINE_KEY, JSON.stringify(REFINE_CACHE)); } catch (e) { /* storage unavailable */ }
+  }
+  function* refineRoute(n, policy, lambda, exact, path, r0) {
+    const key = p => p.map(m => m[0]).join(',');
+    const mk = ws => ws.map(w => [w, E.tierOfWave(w)]);
+    const valid = p => {
+      let pw = 0, pt = n.P;
+      for (const m of p) { if (m[0] < 10 || m[1] <= pt || m[0] >= n.goal || (pw && m[0] < pw * 1.2)) return false; pw = m[0]; pt = m[1]; }
+      return true;
+    };
+    const seen = new Map([[key(path), { path, r: r0 }]]);
+    let best = seen.get(key(path));
+    function* tryWaves(ws) {
+      const p = mk(ws), k = key(p);
+      if (seen.has(k) || !valid(p)) return;
+      const gen = E.simulateGen(simOpts(n, policy.arg, lambda, null, p, exact));
+      let g = gen.next();
+      while (!g.done) { yield 'refine'; g = gen.next(); }
+      const c = { path: p, r: g.value };
+      seen.set(k, c);
+      if (better(c.r, best.r)) best = c;
+    }
+    // grid over two prestiges: the next two for a short route, the two highest for a long one (early waves matter little)
+    const base = path.map(m => m[0]), L = base.length;
+    const gi = L <= 2 ? [0, 1] : [L - 2, L - 1];
+    // a recalculation in the same tier starts from a route already checked, so a tighter grid plus that route is enough
+    const prev = S.ui.lastRoute && S.ui.lastRoute.P === n.P && S.ui.lastRoute.goal === n.goal ? S.ui.lastRoute.ws : null;
+    const offs = L <= 2 && !prev ? [-10, -5, 0, 5, 10] : [-5, 0, 5];
+    if (prev) { yield* tryWaves(prev); for (const d of [-5, 5]) { const ws = prev.slice(); ws[0] += d; yield* tryWaves(ws); } }
+    for (const a of offs) for (const b of (L > 1 ? offs : [0])) {
+      const ws = base.slice(); ws[gi[0]] += a; if (L > 1) ws[gi[1]] += b;
+      yield* tryWaves(ws);
+    }
+    for (let i = 0; i < L; i++) if (gi.indexOf(i) < 0) for (const d of [-5, 5]) {
+      const ws = best.path.map(m => m[0]); ws[i] += d;
+      yield* tryWaves(ws);
+    }
+    // stickiness: a recalculation does not flip the next prestige wave for a tiny gain
+    const stick = S.ui.nextW && S.ui.nextW.P === n.P ? S.ui.nextW.w : null;
+    if (stick != null && best.r.attainable && best.path[0][0] !== stick) {
+      let keep = null;
+      seen.forEach(c => { if (c.path[0][0] === stick && c.r.attainable && (!keep || c.r.completionH < keep.r.completionH)) keep = c; });
+      if (keep && keep.r.completionH <= best.r.completionH * 1.01) best = keep;
+    }
+    return best;
+  }
+  function* pipeline(n0) {
+    let route = yield* routeSearch(n0);
+    const owned = usesGems() ? n0.ownedGems : { atk: 0, hp: 0, speed: 0, x2: 0 };
+    const gemFor = tier => (tier === n0.P && n0.gemSkip) ? owned : E.gemsFor(tier, owned, route.G);
+    // the plan assumes the recommended gem upgrades for this tier are bought (unless the player continues without them)
+    const n = Object.assign({}, n0, { origGoal: n0.goal, goal: route.goalEff, path: route.path, gemFor, gems: gemFor(n0.P) });
     let best = null;
     for (let i = 0; i < LAMBDAS.length; i++) {
       yield 'lambda';
@@ -1410,56 +1737,45 @@ const Engine = (function () {
       yield 'own';
       chosen = sim(n, iv, lambda); policy = { type: 'fixed', iv, arg: iv };
     }
-    // look for a faster prestige route; the standard route stays as the fallback
-    let usedPath = null, pathInfo = null;
-    {
-      const sigOf = p => JSON.stringify(p.filter(m => m[1] > n.P && m[0] < n.goal));
-      const seen = new Set([sigOf(E.MIL)]), uniq = [];
-      ALT_PATHS.forEach(a => { const s = sigOf(a.path); if (!seen.has(s)) { seen.add(s); uniq.push(a); } });
-      if (uniq.length) {
-        yield 'paths';
-        const origFast = sim(n, 2, lambda, null, E.MIL);
-        const tried = [];
-        for (const a of uniq) { yield 'paths'; tried.push({ a, r: sim(n, 2, lambda, null, a.path) }); }
-        let top = null;
-        tried.forEach(x => { if (!top || better(x.r, top.r)) top = x; });
-        const origChosen = chosen;
-        if (top && better(top.r, origFast)) {
-          yield 'paths';
-          const alt = sim(n, policy.arg, lambda, null, top.a.path);
-          const clearly = alt.attainable !== origChosen.attainable ? alt.attainable
-            : (alt.attainable ? alt.completionH < origChosen.completionH * 0.99 : alt.maxWave > origChosen.maxWave);
-          if (clearly) { chosen = alt; usedPath = top.a; }
-        }
-        pathInfo = { origFast, tried, origChosen, used: usedPath };
-      }
-    }
-    const pathArg = usedPath ? usedPath.path : null;
     // Auto timing: every recommended visit must lift the theoretical max wave by the chosen minimum (pausable, so the page stays responsive)
-    if (policy.type === 'auto') {
-      const mp = minProgOf(n.minProg);
-      if (mp.waves || mp.pct) {
-        const gen = E.simulateGen(simOpts(n, policy.arg, lambda, null, pathArg, { minWaves: mp.waves, minProgress: mp.pct }));
-        let r = gen.next();
-        while (!r.done) { yield 'minprog'; r = gen.next(); }
-        chosen = r.value;
+    const mp = minProgOf(n.minProg);
+    const exact = policy.type === 'auto' && (mp.waves || mp.pct) ? { minWaves: mp.waves, minProgress: mp.pct } : {};
+    if (exact.minWaves != null) {
+      const gen = E.simulateGen(simOpts(n, policy.arg, lambda, null, route.path, exact));
+      let r = gen.next();
+      while (!r.done) { yield 'minprog'; r = gen.next(); }
+      chosen = r.value;
+    }
+    // The route search ranks routes with a simpler timing rule so it stays quick. Re-check the routes around its pick with the
+    // player's exact settings (the ones the plan uses) and keep the fastest.
+    if (route.path.length) {
+      // the result for an unchanged setup is remembered, so a reload does not repeat the check
+      const rkey = JSON.stringify([n0.P, n0.lv, n0.cur.map(Math.round), owned, n0.gemPref, !!n0.gemSkip, n.goal, n0.interval, n0.minProg]);
+      const known = REFINE_CACHE[rkey];
+      let best;
+      if (known && known.length) {
+        const p = known.map(w => [w, E.tierOfWave(w)]);
+        const gen = E.simulateGen(simOpts(n, policy.arg, lambda, null, p, exact));
+        let g = gen.next();
+        while (!g.done) { yield 'minprog'; g = gen.next(); }
+        best = { path: known.join() === route.path.map(m => m[0]).join() ? route.path : p, r: g.value };
+      } else {
+        best = yield* refineRoute(n, policy, lambda, exact, route.path, chosen);
+        saveRefine(rkey, best.path.map(m => m[0]));
       }
+      if (best.path !== route.path) { route = Object.assign({}, route, { path: best.path, refined: true }); n.path = best.path; }
+      chosen = best.r;
     }
-    // when the goal is out of reach, also see what maxed gems (as available at this prestige tier) would manage
-    let maxed = null;
-    if (!chosen.attainable) {
-      yield 'maxed';
-      const mg = { atk: n.gm.atk, hp: n.gm.hp, speed: n.gm.speed, x2: 1 };
-      maxed = { gems: mg, r: sim(withGems(n, mg), policy.arg, lambda, null, usedPath ? usedPath.path : null) };
-    }
+    const pathArg = route.path;
+    // when the original goal is out of reach, see how much longer it would take
     let needH = null, extMax = null;
-    if (!chosen.attainable) {
+    if (route.state === 'highest' || !chosen.attainable) {
       yield 'extend';
-      const ext = sim(n, policy.arg, lambda, Math.max(n.remainH * 6, 24 * 120), pathArg);
+      const ext = sim(Object.assign({}, n, { goal: n0.goal }), policy.arg, lambda, Math.max(n.remainH * 6, 24 * 120), pathArg);
       if (ext.attainable) needH = ext.completionH;
       extMax = ext.maxWave;
     }
-    return { adaptTable, policy, chosen, lambda, needH, extMax, pathArg, pathInfo, maxed };
+    return { adaptTable, policy, chosen, lambda, needH, extMax, pathArg, route, n, owned };
   }
 
   let token = 0;
@@ -1521,9 +1837,10 @@ const Engine = (function () {
     function step() {
       if (my !== token) return;
       let r;
-      try { r = gen.next(); } catch (err) { if (window.console) console.error(err); $('#sbBig').textContent = 'Calculation error'; $('#sbSub').textContent = 'Please refresh the page and try again.'; setBusy(false); return; }
-      if (r.done) { render(n, r.value); setBusy(false); gemWork(n, r.value, my); }
-      else setTimeout(step, 0);
+      const t0 = performance.now();   // work in ~15 ms slices: fast, and the page stays responsive
+      try { do { r = gen.next(); } while (!r.done && performance.now() - t0 < 15); } catch (err) { if (window.console) console.error(err); $('#sbBig').textContent = 'Calculation error'; $('#sbSub').textContent = 'Please refresh the page and try again.'; setBusy(false); return; }
+      if (r.done) { const bt = $('#sbMain .busytag'); if (bt) bt.textContent = 'Updating'; render(r.value.n, r.value); setBusy(false); }
+      else { const bt = $('#sbMain .busytag'); if (bt) bt.textContent = r.value === 'route' ? 'Working out your prestige path' : r.value === 'refine' ? 'Checking nearby routes' : 'Updating'; setTimeout(step, 0); }
     }
     setTimeout(step, 20);
   }
@@ -1628,9 +1945,10 @@ const Engine = (function () {
     const n = normalized();
     const pend = PLAN.steps.filter(s => !s.done);
     const lv2 = Object.assign({}, n.lv); pend.forEach(s => { lv2[s.id] = s.to; });
-    const st2 = E.computeStats(n.P, n.gems, lv2);
+    const gP = PLAN.startGems || n.gems;
+    const st2 = E.computeStats(n.P, gP, lv2);
     const prof = E.evalBuild(st2, PLAN.target, 0);
-    const inc = E.incomePerRun(prof.cleared, n.gems, st2);
+    const inc = E.incomePerRun(prof.cleared, gP, st2);
     return { n, pend, rate: inc.map(v => v / prof.runH) };
   }
   function dynCheckin() {
@@ -1715,10 +2033,10 @@ const Engine = (function () {
       });
       h += '<div class="row2" style="margin-top:10px"><button type="button" id="btnAllDone">Mark all done</button><span class="note">Expected to reach about ' + wl(PLAN.x) + ' after these purchases.</span></div>';
     } else if (PLAN.view === 'finish') {
-      h = '<h2>Goal run</h2><p>Your build can reach W' + n.goal + '. A run takes about ' + dur(prof.tTarget) + '. No further purchases are needed.</p>';
+      h = '<h2>Goal run</h2><p>Your build can reach W' + PLAN.n.goal + '. A run takes about ' + dur(prof.tTarget) + '. No further purchases are needed.</p>';
     } else if (PLAN.view === 'prestige') {
       h = '<h2>Prestige for P' + PLAN.tier + '</h2><p>Your build can reach wave ' + PLAN.target + ' in about ' + dur(prof.tTarget) + '. Prestige when your run reaches this wave. Prestiging resets non-gem upgrades and currency.</p>' +
-        '<div class="row2"><button type="button" class="primary" id="btnPrestigeDone">Prestige done</button></div>';
+        '<div class="row2"><button type="button" class="primary" id="btnPrestigeDone">Prestige done</button></div>' + prestigeGemPreview();
     } else {
       const ci = PLAN.ci;
       h = '<h2>Next upgrade set</h2><div class="waitbig" id="ciClock">' + (ci.t <= 0 ? 'Ready now' : 'Ready around ' + shortClock(ci.at)) + '</div>' +
@@ -1727,7 +2045,11 @@ const Engine = (function () {
         [1, 2, 3, 4].map(t => '<label class="nf t' + t + '"><b>T' + t + '</b><input class="int" type="text" inputmode="numeric" pattern="[0-9]*" id="nx_c' + t + '" value="' + Math.max(0, Math.round(ci.held[t - 1])) + '" autocomplete="off" enterkeyhint="done"></label>').join('') + '</div>' +
         '<div class="row2"><button type="button" class="primary" id="btnCheckinDone">Show my upgrade set</button></div>';
     }
+    if (PLAN.view === 'buy' || PLAN.view === 'checkin') h = gemCardHtml() + gemStopNote() + h;
     el.innerHTML = h;
+    el.querySelectorAll('.gemdone').forEach(b => b.addEventListener('click', () => gemDone(b.dataset.gem)));
+    const ga = $('#btnGemAll'); if (ga) ga.addEventListener('click', gemAllDone);
+    const gsk = $('#btnGemSkip'); if (gsk) gsk.addEventListener('click', gemSkip);
     el.querySelectorAll('.donebtn').forEach(b => b.addEventListener('click', () => doneStep(+b.getAttribute('data-step'))));
     const all = $('#btnAllDone'); if (all) all.addEventListener('click', () => { PLAN.steps.forEach((s, i) => { if (!s.done) applyStep(i); }); finishStepUpdate(); });
     const b1 = $('#btnCheckinDone'); if (b1) b1.addEventListener('click', checkinDone);
@@ -1746,6 +2068,11 @@ const Engine = (function () {
     updateStatusCheckin();
     renderPlan();
   }
+  function prestigeGemPreview() {
+    const fp = PLAN && PLAN.firstPres;
+    const gp = fp && fp.gemBuy ? gemBuyList(fp.gemBuy.from, fp.gemBuy.to) : [];
+    return gp.length ? '<p class="note">After you prestige, the planner lists these gem upgrades for P' + fp.to + ' (optional): ' + gemLines(gp) + '. Cost: ' + fmt(gemTotal(gp)) + '.</p>' : '';
+  }
   function applyStep(i) {
     const s = PLAN.steps[i]; if (s.done) return;
     S.cur[s.tier - 1] = Math.max(0, Math.round(num(S.cur[s.tier - 1], 0) - s.cost));
@@ -1763,7 +2090,7 @@ const Engine = (function () {
   }
   function prestigeDone() {
     OV = [null, null, null, null];
-    S.P = PLAN.tier; S.lv = {}; S.cur = [0, 0, 0, 0]; S.lastCheckin = null; S.curAt = Date.now();
+    S.P = PLAN.tier; S.lv = {}; S.cur = [0, 0, 0, 0]; S.lastCheckin = null; S.curAt = Date.now(); S.ui.gemSkip = null; S.ui.nextW = null; S.ui.lastRoute = null;
     save(); buildInputs(); compute();
   }
 
@@ -1812,7 +2139,7 @@ const Engine = (function () {
     const stNow = E.computeStats(n.P, n.gems, n.lv);
     const lvAfter = Object.assign({}, n.lv);
     if (PLAN) PLAN.steps.forEach(s => { if (!s.done) lvAfter[s.id] = s.to; });   // what is still to buy
-    const stNext = E.computeStats(n.P, n.gems, lvAfter);
+    const stNext = E.computeStats(n.P, PLAN && PLAN.startGems ? PLAN.startGems : n.gems, lvAfter);
     const rNow = E.evalBuild(stNow, 1001, 0), rNext = E.evalBuild(stNext, 1001, 0);
     const runDur = h => { const s = Math.round(h * 3600), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return hh ? hh + 'h ' + mm + 'm' : mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's'; };
     // Range of outcomes: random runs vary because blocks and crits are random. Min and max are the 10th and 90th percentile runs.
@@ -1825,7 +2152,7 @@ const Engine = (function () {
     let h = '<h3>Your stats</h3><div class="scroll"><table><tr><th>Stat</th><th>Now</th><th>After buying</th></tr>' +
       rowsS.map(s => '<tr><td>' + s[0] + '</td><td>' + s[3](s[1]) + '</td><td>' + s[3](s[2]) + '</td></tr>').join('') + '</table></div>' +
       '<p class="note">Min and max wave show where about 80% of runs end. Runs vary because blocks and critical hits are random. The planner\'s estimates use the average, which sits between the two.</p>';
-    const bw = E.MIL.map(m => m[0]).concat([200, 250, n.goal]).filter((w, i, a) => a.indexOf(w) === i && w <= 1000).sort((a, b) => a - b);
+    const bw = (PLAN && PLAN.route ? PLAN.route.path.map(m => m[0]) : []).concat([200, 250, n.goal]).filter((w, i, a) => a.indexOf(w) === i && w <= 1000).sort((a, b) => a - b);
     h += '<h3 style="margin-top:14px">One-hit damage needed</h3><div class="scroll"><table><tr><th>Wave</th><th>Enemy HP</th><th>Your damage</th><th>Status</th></tr>';
     bw.forEach(w => {
       const hp = E.EHP[w], ok = stNext.dmg >= hp;
@@ -1847,18 +2174,23 @@ const Engine = (function () {
     const ev = res.events;
     const first = ev.find(e => e.type === 'checkin');
 
+    const route = R.route, highest = route.state === 'highest';
     const sbMain = $('#sbMain');
-    sbMain.classList.toggle('ok', res.attainable); sbMain.classList.toggle('bad', !res.attainable);
-    if (res.attainable) {
+    sbMain.classList.toggle('ok', res.attainable && !highest); sbMain.classList.toggle('bad', !res.attainable || highest);
+    if (res.attainable && !highest) {
       $('#sbLab').textContent = 'Reachable in time';
       $('#sbBig').textContent = 'W' + n.goal + ' in ' + dur(res.completionH);
       $('#sbSub').textContent = dur(slack) + ' to spare';
+    } else if (highest && res.attainable) {
+      $('#sbLab').textContent = 'W' + n.origGoal + ' not reachable in time';
+      $('#sbBig').textContent = 'Planning for W' + n.goal + ' in ' + dur(res.completionH);
+      const need = R.needH ? 'W' + n.origGoal + ' would require about ' + dur(R.needH) + ', which is ' + dur(R.needH - n.remainH) + ' beyond the time remaining.' : 'Projected maximum with additional time: about W' + (R.extMax || res.maxWave) + '.';
+      $('#sbSub').innerHTML = 'The planner switched from fastest completion to the highest reward wave it can reach.<br>' + need;
     } else {
       $('#sbLab').textContent = 'Not reachable in time';
       $('#sbBig').textContent = 'Projected max wave: W' + res.maxWave;
-      const need = R.needH ? 'W' + n.goal + ' would require about ' + dur(R.needH) + ', which is ' + dur(R.needH - n.remainH) + ' beyond the time remaining.' : 'Projected maximum with additional time: about W' + (R.extMax || res.maxWave) + '.';
-      const gemLine = R.maxed ? (R.maxed.r.attainable ? 'With maximum gems (P' + n.P + '): W' + n.goal + ' in ' + dur(R.maxed.r.completionH) : 'With maximum gems (P' + n.P + '): W' + R.maxed.r.maxWave) : '';
-      $('#sbSub').innerHTML = (gemLine ? gemLine + '<br>' : '') + need;
+      const need = R.needH ? 'W' + n.origGoal + ' would require about ' + dur(R.needH) + ', which is ' + dur(R.needH - n.remainH) + ' beyond the time remaining.' : 'Projected maximum with additional time: about W' + (R.extMax || res.maxWave) + '.';
+      $('#sbSub').textContent = need;
     }
 
     const nextEv = ev[1] && ev[1].type === 'checkin' ? ev[1] : null;
@@ -1871,6 +2203,11 @@ const Engine = (function () {
     const firstStart = startLvs[ev.indexOf(first)];
     PLAN = { firstBuys: first.buys, firstStart, firstP: first.P, steps: [], target: first.target, tier: first.tier, x: first.x, hp: first.hp, nextWait: first.gap || 1, nextEv, blocks: buildBlocks(ev, startLvs), n, R };
     PLAN.steps = orderedSteps(first.buys, firstStart, first.P, first.target);
+    PLAN.route = route; PLAN.owned = R.owned; PLAN.startGems = n.gems;
+    PLAN.gemBuys = usesGems() ? gemBuyList(R.owned, n.gems) : [];
+    PLAN.firstPres = ev.find(e => e.type === 'prestige') || null;
+    S.ui.nextW = route.path.length ? { P: n.P, w: route.path[0][0] } : null;
+    S.ui.lastRoute = route.path.length ? { P: n.P, goal: n.goal, ws: route.path.map(m => m[0]) } : null; save();   // a later recalculation keeps this wave unless another is clearly (1%) faster
 
     // one-line summary under the time-between-sets setting
     const sets = ev.filter(e => e.type === 'checkin' && e.buys.length).length;
@@ -1881,27 +2218,31 @@ const Engine = (function () {
     const html = [];
     html.push('<section class="panel" id="stepPanel"></section>');
     html.push('<section class="panel" id="planPanel"></section>');
-    let h = '';
+    html.push(det('path', 'Prestige Path', '<div id="pathBody"></div>', true));
 
     html.push(det('stats', 'Stats and Breakpoints', '<div id="statsBody">' + statsHtml() + '</div>', false));
 
     html.push(det('how', 'How it works',
       '<h3>Initial setup</h3><ol class="plain">' +
-      '<li><b>Event Settings:</b> set your wave goal. The time remaining is taken from your device clock.</li>' +
+      '<li><b>Event Settings:</b> set your wave goal and how you want to handle gem upgrades. The time remaining is taken from your device clock.</li>' +
       '<li><b>Prestige:</b> enter your current prestige tier.</li>' +
       '<li><b>Event Currency:</b> enter the currency you currently hold.</li>' +
-      '<li><b>Gems:</b> select Use gems if you own gem upgrades, then enter your levels. The Rec. column shows the lowest-cost levels that still reach your goal in time.</li>' +
+      '<li><b>Gems:</b> enter the gem levels you own (hidden when gem upgrades is set to None). The Rec. column shows what the planner suggests for your gem setting.</li>' +
       '<li><b>Upgrades:</b> enter the level of each upgrade you own. Rows unlock with your prestige tier and once the row above has at least 1 level.</li>' +
       '<li>Select <b>Setup complete</b>. The plan is calculated once you do.</li>' +
       '</ol><h3 style="margin-top:12px">Each round</h3><ol class="plain">' +
       '<li>Under <b>Buy now</b>, purchase each upgrade in the game and select Done. The Order menu sorts the list by impact or by tier.</li>' +
       '<li>Allow the game to run until the time shown so that event currency can accumulate.</li>' +
       '<li>The currency fields are pre-filled with an estimate. Enter your actual amounts to override them; a field you edit keeps your value. Then select <b>Show my upgrade set</b>.</li>' +
-      '<li>When the planner indicates <b>Prestige</b>, prestige in the game and select Prestige done.</li>' +
+      '<li>When the planner indicates <b>Prestige</b>, prestige in the game and select Prestige done. Any gem upgrades suggested for the new tier are listed first, and you can skip them.</li>' +
+      '<li>The <b>Prestige Path</b> lists every prestige the planner expects between now and your goal.</li>' +
       '</ol><p class="note" style="margin-top:10px">Return to Setup only when something changes outside the planner, such as new gem levels. Use Import/Export to transfer your setup to another device.</p>', false));
 
     $('#results').innerHTML = html.join('');
     renderStep();
+    renderPath();
+    lastGemInfo = gemInfoFrom(PLAN);
+    if (lastGemInfo) applyGemInfo(lastGemInfo);
   }
 
   /* ---------- gems ---------- */
@@ -1909,19 +2250,24 @@ const Engine = (function () {
   function gemSetCost(owned, rec) {
     return gemRange(owned.hp, rec.hp) + gemRange(owned.atk, rec.atk) + Math.max(0, rec.speed - owned.speed) * 500 + (rec.x2 && !owned.x2 ? 500 : 0);
   }
-  // Cumulative sets in the order they pay off (2x currency, event speed, HP, then attack), ending at the maximum.
-  function gemLadder(own, mx) {
-    const g = Object.assign({}, own), steps = [];
-    const bump = (k, to) => { const t = Math.min(to, mx[k]); if (g[k] < t) { g[k] = t; steps.push(Object.assign({}, g)); } };
-    bump('x2', 1); bump('speed', 1); bump('hp', 3); bump('speed', 2); bump('hp', 6); bump('speed', 3);
-    for (let to = 9; to < mx.hp + 3; to += 3) bump('hp', to);
-    for (let to = 3; to < mx.atk + 3; to += 3) bump('atk', to);
-    return steps;
+  const GEM_NAMES = { hp: 'Max HP gem', atk: 'Attack Damage gem', speed: 'Event Speed gem', x2: '2x Event Currency' };
+  // what to buy to go from one gem set to another, with the cost of each line
+  function gemBuyList(from, to) {
+    const out = [];
+    ['hp', 'atk', 'speed', 'x2'].forEach(k => {
+      const a = from[k] || 0, b = to[k] || 0;
+      if (b <= a) return;
+      const cost = k === 'hp' || k === 'atk' ? gemRange(a, b) : (k === 'speed' ? (b - a) * 500 : 500);
+      out.push({ key: k, name: GEM_NAMES[k], from: a, to: b, cost });
+    });
+    return out;
   }
+  const gemLines = list => list.map(g => g.key === 'x2' ? '2x Event Currency' : g.name.replace(' gem', '') + ' ' + g.from + ' to ' + g.to).join(', ');
+  const gemTotal = list => list.reduce((s, g) => s + g.cost, 0);
   function applyGemInfo(info) {
     const note = $('#gemNote'); if (!note) return;
     note.textContent = info.note;
-    if (!S.useGems) return;
+    if (!usesGems()) return;
     const set = (id, t) => { const el = $('#' + id); if (el) el.textContent = t; };
     set('rec_hp', info.rec.hp); set('rec_atk', info.rec.atk); set('rec_speed', info.rec.speed); set('rec_x2', info.rec.x2 ? 'yes' : 'no');
     const og = normalized().ownedGems;
@@ -1930,72 +2276,89 @@ const Engine = (function () {
     });
     const s = $('#gemSummary'); if (s) s.innerHTML = info.summary;
   }
-  const GEM_SLACK = 0.9; // recommended gems should finish with at least 10% of the event to spare
-  function gemWork(n, R, my) {
-    // The recommendation is the cheapest gem set that reaches the goal from your current state and the time left.
-    // It is worked out from zero gems, so it does not depend on the levels you entered.
-    function* work() {
-      const none = { atk: 0, hp: 0, speed: 0, x2: 0 };
-      const own = S.useGems ? n.ownedGems : none;
-      const mx = { atk: n.gm.atk, hp: n.gm.hp, speed: n.gm.speed, x2: 1 };
-      const feas = r => r.attainable && r.completionH <= n.remainH * GEM_SLACK;
-      // fixed route and Auto settings, so the recommendation does not shift when the levels you entered change
-      const run = g => sim(withGems(n, g), { G: 3 }, 20, null, ALT_PATHS[0].path);
-      // what the plan itself says without gems (for the note); the recommendation uses the fixed settings above
-      let noGem = R.chosen;
-      if (S.useGems) { yield; noGem = sim(withGems(n, none), R.policy.arg, R.lambda, null, R.pathArg); }
-      yield;
-      const noGemRec = run(none);
-      let maxedRes = null;
-      let rec, recRes, state;
-      if (feas(noGemRec)) { rec = none; recRes = noGemRec; state = 'none'; }
-      else {
-        yield; maxedRes = run(mx);
-        if (!feas(maxedRes)) { rec = mx; recRes = maxedRes; state = 'short'; }
-        else {
-          const steps = gemLadder(none, mx);
-          let lo = 0, hi = steps.length - 1, hiRes = maxedRes;
-          while (lo < hi) {
-            const mid = (lo + hi) >> 1;
-            yield;
-            const r = run(steps[mid]);
-            if (feas(r)) { hi = mid; hiRes = r; } else lo = mid + 1;
-          }
-          rec = steps[hi]; recRes = hiRes; state = 'found';
-          // shave: try dropping each gem one step while it still reaches the goal with room to spare
-          let tries = 0;
-          for (const dim of ['x2', 'speed', 'hp', 'atk']) {
-            while (tries < 5 && rec[dim] > 0) {
-              const cand = Object.assign({}, rec);
-              cand[dim] = Math.max(0, rec[dim] - (dim === 'hp' || dim === 'atk' ? 3 : 1));
-              yield; tries++;
-              const r = run(cand);
-              if (feas(r)) { rec = cand; recRes = r; } else break;
-            }
-          }
-        }
-      }
-      return { noGem, own, rec, recRes, maxedRes, state, mx, none };
+  // The Gems section text, worked out from the plan's own route (so it always agrees with the Prestige Path).
+  function gemInfoFrom(P) {
+    if (!P || !usesGems()) return null;
+    const n = P.n, route = P.route, owned = P.owned, rec = P.startGems;
+    const mx = { atk: n.gm.atk, hp: n.gm.hp, speed: n.gm.speed, x2: 1 };
+    const recCost = gemSetCost(owned, rec), maxCost = gemSetCost(owned, mx);
+    const goalTxt = 'W' + n.goal, later = route.G.hp > rec.hp || route.G.atk > rec.atk || route.G.speed > rec.speed;
+    let note;
+    if (n.gemSkip) note = 'You chose to continue without gem upgrades at P' + n.P + '. The plan uses the gems you own. The Rec. column shows what the planner would otherwise suggest.';
+    else if (n.gemPref === 'min') {
+      note = route.gemNote === 'short' ? 'Even with the most gems available, ' + goalTxt + ' is tight in the time left. The highest levels you can buy are suggested.'
+        : (recCost === 0 && !later ? 'You already own enough gems to reach ' + goalTxt + ' with time to spare. No further gem upgrades are needed.'
+          : 'Recommended Minimum: the fewest gem upgrades that still reach ' + goalTxt + ' with at least 10% of the event to spare.' + (later ? ' More levels are suggested after later prestiges, when the limits rise.' : ''));
+    } else {
+      note = route.gemNote === 'stopped' ? 'Gem upgrades are no longer being recommended: the next levels would shorten the plan by less than 2%. You can still enter more levels, and the plan recalculates.'
+        : 'Fastest Completion: the Rec. column is the most you can buy at P' + n.P + '. More are suggested after each prestige as the limits rise.';
     }
-    const gen = work();
-    function step() {
-      if (my !== token) return;
-      const r = gen.next();
-      if (!r.done) { setTimeout(step, 0); return; }
-      const { noGem, own, rec, recRes, state, mx, none } = r.value;
-      const recCost = gemSetCost(own, rec), maxCost = gemSetCost(own, mx), fullRecCost = gemSetCost(none, rec);
-      const goalTxt = 'W' + n.goal;
-      let note = noGem.attainable
-        ? 'Gems are optional. ' + goalTxt + ' is reachable without them in about ' + dur(noGem.completionH) + '.'
-        : goalTxt + ' is not reachable without gems (best: W' + noGem.maxWave + ').' + (state === 'short' ? ' Even maximum gems fall short (best: W' + recRes.maxWave + ').' : ' Minimum gems needed: ' + fmt(fullRecCost) + '.');
-      if (!S.useGems && !noGem.attainable) note += ' Enable Use gems to apply the recommended levels.';
-      const summary = 'The recommended levels require ' + fmt(recCost) + ' additional gems. Maximum levels require ' + fmt(maxCost) + '.' + (state !== 'none' && recCost === 0 ? ' You already own the recommended levels.' : '');
-      lastGemInfo = { note, rec, summary };
-      if (my === token) applyGemInfo(lastGemInfo);
-    }
-    step();
+    if (route.state === 'highest') note += ' These levels are sized for W' + n.goal + ', because W' + n.origGoal + ' cannot be reached in time.';
+    const summary = 'The recommended levels require ' + fmt(recCost) + ' additional gems. Maximum levels require ' + fmt(maxCost) + '.' + (recCost === 0 && !n.gemSkip ? ' You already own the recommended levels.' : '');
+    return { note, rec, summary };
+  }
+  // Gem upgrades listed ahead of an upgrade set. Optional: the set can be completed without them.
+  function gemCardHtml() {
+    if (!PLAN || !PLAN.gemBuys.length || PLAN.n.gemSkip) return '';
+    const live = PLAN.gemBuys.filter(g => (normalized().ownedGems[g.key] || 0) < g.to);
+    if (!live.length) return '';
+    let h = '<div class="gembuy"><div class="hrow"><h3>Gem upgrades <span class="muted">optional</span></h3></div>';
+    live.forEach(g => {
+      const have = normalized().ownedGems[g.key] || 0;
+      h += '<div class="buy tg"><span class="tag tg">Gem</span><div class="nm">' + g.name + '<div class="lv">' + (g.key === 'x2' ? 'buy once' : 'level ' + have + ' to ' + g.to + ' (' + (g.to - have) + ' to buy)') + '</div></div>' +
+        '<div class="cost">' + fmt(g.key === 'hp' || g.key === 'atk' ? gemRange(have, g.to) : (g.key === 'speed' ? (g.to - have) * 500 : 500)) + '</div><button type="button" class="gemdone" data-gem="' + g.key + '">Done</button></div>';
+    });
+    h += '<div class="row2" style="margin-top:8px"><button type="button" id="btnGemAll">Mark all done</button><button type="button" id="btnGemSkip">Continue without gem upgrades</button></div>' +
+      '<p class="note">Gem upgrades are not required to continue. Skipping them updates the wave estimates for the gems you own.</p></div>';
+    return h;
+  }
+  function gemStopNote() {
+    if (!PLAN || !PLAN.route || PLAN.n.gemPref !== 'fast' || PLAN.route.gemNote !== 'stopped' || PLAN.gemBuys.length) return '';
+    return '<p class="note gemstop">Gem upgrades are no longer being recommended: the next levels would shorten the plan by less than 2%. You can still enter additional gem upgrades under Gems, and the plan recalculates.</p>';
+  }
+  function gemDone(key) {
+    const g = PLAN.gemBuys.find(x => x.key === key); if (!g) return;
+    S.gems[key] = g.to; save();
+    const el = { hp: 'in_ghp', atk: 'in_gatk', speed: 'in_gspeed' }[key]; if (el && $('#' + el)) $('#' + el).value = g.to;
+    if (key === 'x2' && $('#in_gx2')) $('#in_gx2').checked = true;
+    refreshRows(); renderStep(); refreshStats(); if (lastGemInfo) applyGemInfo(gemInfoFrom(PLAN));
+  }
+  function gemAllDone() { PLAN.gemBuys.forEach(g => { S.gems[g.key] = g.to; }); save(); syncGemInputs(); refreshRows(); renderStep(); refreshStats(); const gi = gemInfoFrom(PLAN); if (gi) applyGemInfo(gi); }
+  function syncGemInputs() {
+    [['in_ghp', 'hp'], ['in_gatk', 'atk'], ['in_gspeed', 'speed']].forEach(([id, k]) => { const el = $('#' + id); if (el) el.value = S.gems[k]; });
+    const x = $('#in_gx2'); if (x) x.checked = !!S.gems.x2;
+  }
+  function gemSkip() {
+    const es = eventWindow(Date.now());
+    S.ui.gemSkip = { P: normalized().P, ev: es.start }; save(); lastGemInfo = null; compute();
   }
 
+  /* ---------- Prestige Path ---------- */
+  function renderPath() {
+    const el = $('#pathBody'); if (!el || !PLAN) return;
+    const n = PLAN.n, R = PLAN.R, route = PLAN.route, res = R.chosen, pres = res.events.filter(e => e.type === 'prestige');
+    const at = h => shortClock(n.T0 + h * 3600000);
+    let h = '';
+    if (route.state === 'highest') {
+      h += '<p class="pathlab warnlab"><b>Highest reward wave.</b> W' + n.origGoal + ' cannot be reached in the time left, so the planner switched from fastest completion to the highest reward wave it can reach: <b>W' + n.goal + '</b>. Reward waves are the waves where the game pays a reward (2, 4, 6 ... 50, 55 ... 100, 115, 130, 150, 200, 250).</p>';
+    } else {
+      h += '<p class="pathlab"><b>Fastest completion.</b> The route below reaches W' + n.goal + ' in the least time the planner can find' + (res.attainable ? ': about ' + dur(res.completionH) + '.' : '.') + '</p>';
+    }
+    if (!route.path.length) h += '<p>No further prestige is planned. Push for W' + n.goal + ' from P' + n.P + '.</p>';
+    else {
+      h += '<div class="scroll"><table class="pathtbl"><tr><th>Step</th><th>Prestige at</th><th>New tier</th><th>Expected</th><th>Gem upgrades afterwards</th></tr>';
+      h += '<tr><td>Now</td><td>-</td><td>P' + n.P + '</td><td>-</td><td>' + (PLAN.gemBuys.length ? gemLines(PLAN.gemBuys) + ' (' + fmt(gemTotal(PLAN.gemBuys)) + ')' : (n.gemSkip ? 'Skipped' : '-')) + '</td></tr>';
+      pres.forEach((e, i) => {
+        const gb = e.gemBuy ? gemBuyList(e.gemBuy.from, e.gemBuy.to) : [];
+        h += '<tr><td>' + (i + 1) + '</td><td>W' + e.wave + '</td><td>P' + e.to + '</td><td>' + at(e.t) + '<br><span class="muted">in ' + durShort(e.t) + '</span></td><td>' + (gb.length ? gemLines(gb) + ' (' + fmt(gemTotal(gb)) + ')' : '-') + '</td></tr>';
+      });
+      const unreached = route.path.length - pres.length;
+      if (unreached > 0) h += '<tr><td colspan="5" class="muted">' + unreached + ' more prestige' + (unreached > 1 ? 's' : '') + ' planned after the time shown, if time allows: ' + route.path.slice(pres.length).map(m => 'W' + m[0] + ' for P' + m[1]).join(', ') + '.</td></tr>';
+      h += '<tr><td>Goal</td><td>W' + n.goal + '</td><td></td><td>' + (res.attainable ? at(res.completionH) + '<br><span class="muted">in ' + durShort(res.completionH) + '</span>' : 'not reached') + '</td><td></td></tr></table></div>';
+    }
+    h += '<p class="note">The path is recalculated when you check in, when you finish setup, and a short while after you edit a value. Times are estimates. A prestige resets non-gem upgrades and currency; gems are kept.</p>';
+    el.innerHTML = h;
+  }
 
   /* ---------- change log ----------
      Plain-language notes for players, newest first, one block per day (Pacific Time). Add each new change to the block for the day it
@@ -2004,6 +2367,15 @@ const Engine = (function () {
      Item kinds: 'new' (something you can now do), 'changed' (something works differently or better), 'fix' (a problem that is now solved).
      Note: blocks dated Sep 26 and earlier carry illustrative dates spread over a month. Real dates start with the Oct 3 block. */
   const CHANGELOG = [
+    { id: '2026-10-08-2', date: '2026-10-08', title: 'Updates', items: [
+      ['fix', 'The prestige path is now checked against your exact timing settings (Auto time between sets and minimum progress per visit) before it is shown. Previously a quicker check could pick a route that was several hours slower under those settings. The first calculation can take longer, up to about 35 seconds at the start of an event; reloading an unchanged setup is quick.'],
+      ['fix', 'The planner no longer recommends prestiging at a fixed wave (such as W160 or W105) when a different prestige wave finishes the goal sooner.'],
+      ['changed', 'Prestige waves are no longer fixed milestones. The planner searches for the route that reaches your goal in the least time, using your Auto timing and minimum progress per visit settings. The Breakpoints table follows that route.'],
+      ['changed', 'The plan is recalculated when you check in and when you finish setup. After you edit a value by hand, it recalculates about 10 seconds later, in case you upgraded in game.'],
+      ['new', 'Prestige Path section between Upgrade Plan and Stats and Breakpoints, showing the predicted prestige waves, times and gem purchases.'],
+      ['new', 'Gem upgrades setting in Event Settings: None, Recommended Minimum (default) or Fastest Completion. None hides the Gems section. Fastest Completion recommends the most you can buy and stops suggesting gems once they no longer speed you up.'],
+      ['new', 'After a prestige, the upgrade set shows the gem upgrades to buy and their gem cost. You can mark the set done without buying them.'],
+      ['new', 'If your goal cannot be reached in the time left, the planner says it switched from fastest completion to the highest reachable reward wave, and names that wave.'] ] },
     { id: '2026-10-07-2', date: '2026-10-07', title: 'Updates', items: [
       ['new', 'Theoretical min wave in Stats. Min and max wave now show the range in which about 80% of runs end, since blocks and critical hits are random.'],
       ['changed', 'Run-time estimates were recalibrated using recorded runs at higher move and event speeds. Average run length, income projections and upgrade set timing are now more accurate for later-stage builds.'] ] },
@@ -2175,7 +2547,7 @@ const Engine = (function () {
   function exportCode() {
     const n = normalized();
     const iv = n.interval === 'auto' ? 0 : INTERVALS.indexOf(n.interval) + 1;
-    const bytes = [1, (S.useGems ? 1 : 0) | (n.ownedGems.x2 ? 2 : 0) | (Math.max(0, iv) << 2) | (MINPROG.findIndex(m => m.key === n.minProg) << 5)];
+    const bytes = [1, (usesGems() ? 1 : 0) | (n.ownedGems.x2 ? 2 : 0) | (Math.max(0, iv) << 2) | (MINPROG.findIndex(m => m.key === n.minProg) << 5)];
     putVar(bytes, n.P); putVar(bytes, n.goal);
     putVar(bytes, n.ownedGems.hp); putVar(bytes, n.ownedGems.atk); putVar(bytes, n.ownedGems.speed);
     n.cur.forEach(c => putVar(bytes, Math.round(c)));
@@ -2186,6 +2558,7 @@ const Engine = (function () {
       else { if (zeros) { bytes.push(128 | zeros); zeros = 0; } bytes.push(L); }
     });
     if (zeros) bytes.push(128 | zeros);
+    if (S.gemPref === 'fast') bytes.push(2);                         // optional last byte: gem preference (absent = Recommended Minimum or None, from the Use gems flag)
     bytes.push(csum(bytes));
     return bytesToB64(bytes);
   }
@@ -2209,6 +2582,7 @@ const Engine = (function () {
       const b = bytes[pos.i++];
       if (b & 128) for (let k = 0; k < (b & 127); k++) o.lv.push(0); else o.lv.push(b);
     }
+    o.pref = pos.i < bytes.length ? bytes[pos.i++] : 0;
     if (o.lv.length !== E.UPG.length || pos.i !== bytes.length) throw new Error('size');
     return o;
   }
@@ -2216,10 +2590,10 @@ const Engine = (function () {
     S.P = o.P; S.goal = Math.max(5, o.goal);
     S.interval = o.iv >= 1 && o.iv <= INTERVALS.length ? String(INTERVALS[o.iv - 1]) : 'auto';
     S.minProg = MINPROG[o.mp].key;
-    S.useGems = o.useGems; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
+    S.gemPref = !o.useGems ? 'none' : (o.pref === 2 ? 'fast' : 'min'); S.ui.gemSkip = null; S.gems = { hp: o.hp, atk: o.atk, speed: o.speed, x2: o.x2 };
     S.cur = o.cur.slice(); S.lv = {}; E.UPG.forEach((up, i) => { S.lv[up.id] = o.lv[i]; });
     blankRowsAbove().forEach(w => { S.lv[w.id] = 1; });
-    S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null]; S.ui.setupDone = true;
+    S.curAt = Date.now(); S.lastCheckin = null; OV = [null, null, null, null]; S.ui.setupDone = true; S.ui.nextW = null; S.ui.lastRoute = null;
     save(); lastGemInfo = null; buildInputs(); compute();
   }
   const dlg = $('#codeDlg');
